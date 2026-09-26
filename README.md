@@ -1,4 +1,4 @@
-# ChemFlow Forense: Plataforma Analítica de Química Forense
+# Forensic DrugLab: Plataforma Pericial de Química Forense
 
 Herramienta analítica e interactiva diseñada para peritos químicos y profesionales de las ciencias forenses. Facilita la toma de decisiones metodológicas en el análisis de sustancias controladas, modelando el comportamiento fisicoquímico de extracción líquido-líquido (L-L), la separación de sustancias de corte, el tamizaje presuntivo colorimétrico y la confirmación espectroscópica.
 
