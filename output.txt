@@ -1,0 +1,45 @@
+Cocaína
+ P1: 1710 cm⁻¹, S1: Estiramiento C=O de amida (carbonilo del grupo éster o amida secundaria)
+ P2: 1738 cm⁻¹, S2: Estiramiento C=O de éster (carbonilo del grupo benzoato o metil éster)
+ P3: 1275 cm⁻¹, S3: Estiramiento C–O de éster o amina terciaria (C–O en éster aromático)
+ P4: 1110 cm⁻¹, S4: Estiramiento C–O–C (éter o éster, enlace sencillo oxigenado)
+ P5: 712 cm⁻¹, S5: Deformación fuera del plano de C–H aromático (anillo bencénico)
+ P6: 1037 cm⁻¹, S6: Estiramiento C–O (alcohol o éster secundario)
+ I1: 82, D1: Fragmento
+ I2: 182, D2: Ion base
+ I3: 83, D3: Fragmento
+ I4: 105, D4: Fragmento
+ I5: 303, D5: Ion molecular
+ I6: 77, D6: Fragmento
+ I7: 94, D7: Fragmento
+ I8: 96, D8: Fragmento
+Metanfetamina
+ P1: 747 cm⁻¹, S1: Deformación fuera del plano C–H (anillo aromático, característica de benceno monosustituido)
+ P2: 698 cm⁻¹, S2: Deformación fuera del plano C–H (anillo aromático, complemento de la banda ~747 cm⁻¹)
+ P3: 1060 cm⁻¹, S3: Estiramiento C–N alifático / modos de flexión C–H en plano (zona fingerprint; posibles solapamientos)
+ P4: 1491 cm⁻¹, S4: Estiramiento C=C aromático (modo de estiramiento del anillo)
+ P5: 1590 cm⁻¹, S5: Estiramiento C=C aromático (modo de estiramiento del anillo)
+ P6: 1085 cm⁻¹, S6: Estiramiento C–N alifático / modos del esqueleto (solapamiento con 1060 cm⁻¹)
+ I1: 58, D1: Ion base
+ I2: 91, D2: Fragmento
+ I3: 59, D3: Fragmento
+ I4: 134, D4: Fragmento
+ I5: 65, D5: Fragmento
+ I6: 56, D6: Fragmento
+ I7: 42, D7: Fragmento
+ I8: 57, D8: Fragmento
+THC
+ P1: 1580 cm⁻¹, S1: Estiramiento C=C aromático / vibraciones del anillo fenólico (modo conjugado)
+ P2: 1040 cm⁻¹, S2: Estiramiento C–O (fenol / éter) y modos fingerprint (posible solapamiento)
+ P3: 1620 cm⁻¹, S3: Estiramiento C=C conjugado / olefínico (doble enlace en sistema conjugado)
+ P4: 1180 cm⁻¹, S4: Estiramiento C–O–C / C–O (éteres o enlaces alcoxi)
+ P5: 1130 cm⁻¹, S5: Estiramiento C–O (fenol) / vibraciones del esqueleto
+ P6: 1050 cm⁻¹, S6: Estiramiento C–O / modos del esqueleto (región fingerprint; solapamiento con 1040 cm⁻¹)
+ I1: 299, D1: Ion base
+ I2: 231, D2: Fragmento
+ I3: 314, D3: Ion molecular
+ I4: 43, D4: Fragmento
+ I5: 41, D5: Fragmento
+ I6: 295, D6: Fragmento
+ I7: 55, D7: Fragmento
+ I8: 271, D8: Fragmento
