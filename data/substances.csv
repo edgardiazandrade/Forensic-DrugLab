@@ -1,0 +1,27 @@
+name,behavior,solubility,notes
+Cocaína,base,"Soluble 1 en 600 de agua, 1 en 6.5 de etanol, 1 en 0.7 de cloroformo y 1 en 3.5 de éter.",Clásico: Basificar mezcla a pH > 9 para extraer con solvente apolar. Acidificar para limpiar o cristalizar.
+Metanfetamina,base,"Ligeramente soluble en agua; miscible con etanol, cloroformo y éter.","Nota: Requiere un pH bastante alto (>11) para garantizar que todo pase a fase orgánica, debido a su pKa alto."
+THC,acid,Esencialmente insoluble en agua; soluble 1 en 1 en etanol y acetona; fácilmente soluble en cloroformo y éter de petróleo.,Caso Especial: Es muy lipofílico. Se extrae en orgánico a pH neutro o ácido. Solo se hace soluble en agua a pH muy alcalino (>11).
+LSD,base,Soluble en agua.,Sensible: Se extrae a pH básico suave (8-9). Cuidado con la luz y el calor.
+Aspirina,acid,"Soluble 1 en 300 de agua, 1 en 5 de etanol, 1 en 17 de cloroformo, y 1 en 10 a 15 de éter.","Inverso: Para extraerla, el medio debe ser muy ácido (pH<2−3). Si subes el pH, se va al agua."
+Efedrina,base,Soluble 1 en 20 de agua y 1 en <1 de etanol; soluble en cloroformo con turbidez; soluble en éter.,"Nota: Requiere un pH bastante alto (>11) para garantizar que todo pase a fase orgánica, debido a su pKa alto."
+Sertralina,base,"Agua 3.8 mg/mL (pH dependiente). Soluble en cloroformo:metanol (1:1), etanol.",Comportamiento típico de amina básica.
+Clonazepam,amphoteric,"Solubilidad en mg/mL a 25°C: acetona 31, cloroformo 15, metanol 8.6, éter 0.7, agua <0.1.","Caso Especial: Al tener pKa tan bajo, a pH neutro (7) ya está en forma ""Base Libre"" y se extrae en orgánico. Para ionizarla (agua) necesitas ácido fuerte (pH < 1)."
+Fenacetina,base,"Soluble 1 en 1300 de agua, 1 en 15 de etanol, 1 en 14 de cloroformo y 1 en 90 de éter.","Caso Especial: Al tener pKa tan bajo, a pH neutro (7) ya está en forma ""Base Libre"" y se extrae en orgánico. Para ionizarla (agua) necesitas ácido fuerte (pH < 1)."
+2C-B,base,No especificada en el manual.,Alcaloide típico. Basificar para extraer.
+Metamizol,base,"Soluble 1 en 1.5 de agua y 1 en 30 de etanol; prácticamente insoluble en éter, acetona, benceno y cloroformo.",Caso Especial: Es muy polar y suele ser una sal sódica. Difícil de extraer en solventes apolares comunes (hexano) sin modificaciones drásticas.
+Cafeína,amphoteric,"Soluble 1 en 46 de agua, 1 en 66 de alcohol, 1 en 50 de acetona, 1 en 5.5 de cloroformo; 1 en 530 de éter.","Caso Especial: Es difícil de ""protonar"" para fijarla en agua. Se extrae bien en diclorometano a casi cualquier pH, aunque un pH básico ayuda a limpiar impurezas ácidas (taninos)."
+Ketamina,base,"Sal hidrocloruro: Soluble 1 en 4 de agua, 1 en 14 de etanol y 1 en 6 de metanol; poco soluble en cloroformo; prácticamente insoluble en éter.",pKa cercano al fisiológico. Fácil de manipular entre fases con cambios leves de pH.
+MDMA,base,Datos no especificados en la monografía.,Requiere pH > 10-11 para asegurar extracción completa en fase orgánica.
+MDA,base,Datos no especificados en la monografía.,Requiere pH > 10-11 para asegurar extracción completa en fase orgánica.
+Heroína,base,"Soluble 1 en 1700 de agua, 1 en 31 de etanol, 1 en 1.5 de cloroformo y 1 en 100 de éter.","Cuidado: En medios muy ácidos o muy básicos por tiempo prolongado, se hidroliza a Morfina. Se prefiere pH moderado (8-9) para extracción rápida."
+Levamisol,base,Soluble en ácido acético diluido y en cloroformo.,Corte común. Se extrae junto con cocaína/heroína ya que sus pKa son similares.
+Fentanilo,base,"Ligeramente soluble en agua. (Citrato: Soluble 1 en 40 de agua, 1 en 140 de etanol, 1 en 350 de cloroformo).",Comportamiento clásico de base.
+Ibuprofeno,acid,"Prácticamente insoluble en agua; soluble 1 en 1.5 de etanol, 1 en 1 de cloroformo y 1 en 2 de éter.",Estrategia Ácida: Acidificar (pH<3) para extraer con solvente orgánico.
+Naproxeno,acid,"Prácticamente insoluble en agua; soluble 1 en 25 de etanol, 1 en 15 de cloroformo, y 1 en 40 de éter.",Estrategia Ácida: Acidificar (pH<3) para extraer con solvente orgánico.
+GHB,acid,Soluble en agua y alcohol.,
+Anfetamina,base,Soluble 1 en 50 de agua; soluble en etanol y éter.,
+Codeína,base,"Soluble 1 en 120 de agua, 1 en 2 de etanol, 1 en 0.5 de cloroformo.",
+Diazepam,base,"Ligeramente soluble en agua; soluble 1 en 25 de etanol, 1 en 2 de cloroformo.",
+Alprazolam,base,Prácticamente insoluble en agua; poco soluble en etanol; soluble en cloroformo.,
+Fenobarbital,acid,"Soluble 1 en 1000 de agua, 1 en 8 de etanol, 1 en 40 de cloroformo.",

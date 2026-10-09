@@ -1,0 +1,25 @@
+name,test_name,positive_color,source_id,confidence
+Cocaína,Scott,Azul (azul → rosa → azul con cloroformo),REF-001,VERIFICADO
+Metanfetamina,Marquis,Naranja → Marrón,REF-001,VERIFICADO
+THC,Duquenois-Levine,Violeta (capa inferior),REF-001,VERIFICADO
+LSD,Ehrlich,Púrpura / Violeta,REF-001,VERIFICADO
+Aspirina,McNally,Rojo,REF-001,VERIFICADO
+Efedrina,Liebermann,Rojo-Naranja,REF-001,VERIFICADO
+Clonazepam,Marquis,Naranja,REF-001,VERIFICADO
+Fenacetina,Marquis,Marrón,REF-001,VERIFICADO
+2C-B,Prueba de Marquis,Amarillo a verde,REF-001,VERIFICADO
+Metamizol,Cloruro Férrico,Violeta,REF-001,VERIFICADO
+Cafeína,Murexida,Púrpura,REF-001,VERIFICADO
+Ketamina,Liebermann,Rojo-Naranja,REF-001,VERIFICADO
+MDMA,Marquis,Negro / Púrpura,REF-001,VERIFICADO
+MDA,Mandelin,Verde → Azul,REF-001,VERIFICADO
+Heroína,Marquis,Violeta,REF-001,VERIFICADO
+Levamisol,Liebermann,Rojo-Naranja,REF-001,VERIFICADO
+Fentanilo,Marquis,Naranja,REF-001,VERIFICADO
+Ibuprofeno,Marquis,Naranja (100°C),REF-001,VERIFICADO
+Naproxeno,H2​SO4​ conc.,Naranja,REF-001,VERIFICADO
+GHB,Prueba de Nitrato de Cobalto,Rosa a violeta,REF-001,VERIFICADO
+Anfetamina,Prueba de Marquis,Naranja a marrón,REF-001,VERIFICADO
+Codeína,Prueba de Marquis,Violeta,REF-001,VERIFICADO
+Diazepam,Prueba de Formaldehído-ácido sulfúrico,Naranja,REF-001,VERIFICADO
+Fenobarbital,Prueba de Koppanyi-Zwikker,Violeta,REF-001,VERIFICADO
