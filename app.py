@@ -42,16 +42,21 @@ def inject_custom_css():
     ul { list-style-position: inside; text-align: center; padding: 0; color: #003366; }
     li { text-align: center; color: #003366; }
     
-    /* Tablas con fondo gris y texto azul oscuro */
-    table { 
+    /* Tablas fijas sin movimiento */
+    table, [data-testid="stTable"], .stTable { 
         width: 100%; 
         margin: 0 auto; 
         text-align: center; 
-        transition: all 0.3s ease-in-out; 
         background-color: #E5E7EB; 
         border: 1px solid #D1D5DB; 
         border-radius: 8px; 
         color: #003366; 
+        transform: none !important;
+        transition: none !important;
+    }
+    table:hover, [data-testid="stTable"]:hover, .stTable:hover {
+        transform: none !important;
+        box-shadow: none !important;
     }
     th { 
         background-color: #D1D5DB !important; 
@@ -85,7 +90,7 @@ def inject_custom_css():
         border-color: #003366; 
     }
     
-    img:hover, table:hover { 
+    img:hover { 
         transform: scale(1.02); 
         box-shadow: 0 8px 16px rgba(0, 51, 102, 0.15); 
     }
@@ -106,6 +111,38 @@ def inject_custom_css():
         border-color: #C0392B; 
     }
     
+    
+    .badge-navy {
+        display: inline-block;
+        background-color: #003366;
+        color: #FFFFFF !important;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin: 4px 4px;
+    }
+    .badge-teal {
+        display: inline-block;
+        background-color: #0F766E;
+        color: #FFFFFF !important;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin: 4px 4px;
+    }
+    .badge-red {
+        display: inline-block;
+        background-color: #C0392B;
+        color: #FFFFFF !important;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin: 4px 4px;
+    }
+
     .numeric-val { font-family: 'Courier New', Courier, monospace; color: #002244; font-weight: bold; }
     .color-box { height: 50px; width: 100%; border-radius: 6px; margin-bottom: 12px; box-shadow: inset 0 0 10px rgba(0,0,0,0.15); border: 1px solid #CBD5E1; }
     .biphasic-tube { height: 70px; width: 100%; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #CBD5E1; box-shadow: inset 0 0 10px rgba(0,0,0,0.15); margin-bottom: 12px; }
@@ -222,6 +259,8 @@ def parse_pkas(pka_str, character):
         except: pass
     
     char_low = str(character).lower()
+    if 'xantina' in char_low:
+        return [0.6, vals[0]] if vals else [0.6, 10.4]
     is_multi_species = 'anf' in char_low or 'dip' in char_low
     # Regla 6: Si tiene dos valores pero no corresponde a dos especies, usar el primero
     if not is_multi_species and len(vals) > 1:
@@ -234,7 +273,7 @@ def calculate_ionization(pka_str, character, ph):
         return 0.0, 100.0  # Especie no ionizable / neutra
     
     char_low = str(character).strip().lower()
-    is_multi = 'anf' in char_low or 'dip' in char_low
+    is_multi = 'anf' in char_low or 'dip' in char_low or 'xantina' in char_low
     
     if is_multi and len(pkas) >= 2:
         pka1, pka2 = sorted(pkas[:2])
@@ -306,29 +345,34 @@ def render_placeholder_fixed(msg, fixed_height=250):
     html = f'''<div style="height:{fixed_height}px; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background-color:#E5E7EB; border:1px dashed #9CA3AF; border-radius:8px; margin:0 auto 10px auto; color:#003366;"><div style="font-size:2rem; margin-bottom:5px;">ℹ️</div><div style="font-size:0.9rem; font-weight:600; text-align:center; padding:0 10px;">{msg}</div></div>'''
     st.markdown(html, unsafe_allow_html=True)
 
+def _pick_organic_solvent(solv_acid, solv_basic, char_str):
+    for s in [solv_basic, solv_acid]:
+        s_str = str(s).strip()
+        s_low = s_str.lower()
+        if s_str and s_str != "No especificado" and "agua" not in s_low and "inmiscible" not in s_low and "no extra" not in s_low:
+            return s_str
+    char_low = str(char_str).lower()
+    if 'ácido' in char_low or 'acido' in char_low:
+        return "Cloroformo / Acetato de etilo"
+    return "Cloroformo / Diclorometano"
+
 def get_solvent(info, pka, current_ph):
-    pkas = parse_pkas(pka, info.get('Carácter', 'Base'))
-    pka_val = pkas[0] if pkas else 7.0
-    val = "No especificado"
-    if current_ph < pka_val:
-        for k, v in info.items():
-            if '<' in k and 'Disolvente' in k and v:
-                val = v.strip()
-                break
-    else:
-        for k, v in info.items():
-            if '>' in k and 'Disolvente' in k and v:
-                val = v.strip()
-                break
-                
-    # Reemplazar leyenda inmiscible por el solvente real (Agua / Solvente orgánico)
-    val_low = val.lower()
-    if 'inmiscible' in val_low or 'no extraible' in val_low or 'no extraíble' in val_low:
-        if 'agua' in val_low or 'ionizada' in val_low:
-            return "Agua (Fase Acuosa)"
-        else:
-            return "Agua"
-    return val
+    char_str = info.get('Carácter', 'Base')
+    solv_lt = "No especificado"
+    solv_gt = "No especificado"
+    for k, v in info.items():
+        if '<' in k and 'Disolvente' in k and v:
+            solv_lt = v.strip()
+        elif '>' in k and 'Disolvente' in k and v:
+            solv_gt = v.strip()
+
+    if ('no extra' in solv_lt.lower() or 'inmiscible' in solv_lt.lower()) and ('no extra' in solv_gt.lower() or 'inmiscible' in solv_gt.lower()):
+        return "Agua (Fase Acuosa — Insoluble en CHCl3/Éter)"
+
+    ion_pct, _ = calculate_ionization(pka, char_str, current_ph)
+    if ion_pct >= 50.0:
+        return "Agua (Fase Acuosa)"
+    return _pick_organic_solvent(solv_lt, solv_gt, char_str)
 
 def format_test_name(raw_name):
     if not raw_name or str(raw_name).strip() in ['N/A', '', '-']:
@@ -370,7 +414,7 @@ def render_structure(sustancia, info, selected_ph):
         render_placeholder_fixed("Estructura molecular no disponible", fixed_height=240)
     
     # Subtítulo con nombre y estado libre/ionizado
-    estado = "Forma Ionizada" if obj_is_ion >= 50.0 else "Forma Libre (Neutra)"
+    estado = "Forma Ionizada" if obj_is_ion >= 50.0 else "Forma No Ionizada"
     estado_color = "#C0392B" if obj_is_ion >= 50.0 else "#003366"
     st.markdown(f'<div style="text-align:center; font-weight:600; color:#003366; font-size:0.95rem; margin-top:2px; margin-bottom:8px;">{sustancia} — <span style="color:{estado_color};">{estado}</span> <span style="font-size:0.85rem; color:#4B5563;">(pH {selected_ph:.1f})</span></div>', unsafe_allow_html=True)
 
@@ -414,8 +458,10 @@ def render_ir(sustancia, info):
     picos_ir = []
     for i in range(1, 7):
         num = info.get(f"P{i}", "").strip()
-        if num and num != 'N/A':
-            picos_ir.append({"Vibración (cm⁻¹)": num})
+        if num and num not in ['N/A', '-']:
+            picos_ir.append({
+                "Vibración (cm⁻¹)": num
+            })
     if picos_ir:
         st.table(picos_ir)
 
@@ -428,8 +474,10 @@ def render_ms(sustancia, info):
     iones = []
     for i in range(1, 9):
         ion_val = info.get(f"I{i}", "").strip()
-        if ion_val and ion_val != 'N/A':
-            iones.append({"Relación m/z": ion_val})
+        if ion_val and ion_val not in ['N/A', '-']:
+            iones.append({
+                "Relación m/z": ion_val
+            })
     if iones:
         st.table(iones)
 
@@ -454,6 +502,21 @@ def get_separation_intervals(pka_obj_str, char_obj, pka_cut_str, char_cut):
     intervals.append((start, prev_ph, cur_kind))
     return intervals
 
+def _get_optimal_neutral_ph_action(name, char_str, pkas_list):
+    char_low = str(char_str).lower()
+    pka_val = pkas_list[0] if pkas_list else 7.0
+    if 'xantina' in char_low:
+        return 7.0, f"Ajustar la fase acuosa a <b>pH neutro (pH 7.0)</b>, donde <b>{name}</b> se encuentra en su forma no ionizada (&gt;99%)."
+    elif 'anf' in char_low or 'dip' in char_low or len(pkas_list) >= 2:
+        pi_val = sum(pkas_list) / len(pkas_list) if pkas_list else 7.0
+        return pi_val, f"Ajustar cuidadosamente el pH a su punto isoeléctrico de máxima especie no ionizada (aprox. <b>pH {pi_val:.1f}</b>) para liberar al compuesto (<b>{name}</b>)."
+    elif 'ácido' in char_low or 'acido' in char_low:
+        target_ph = max(1.0, round(pka_val - 2.0, 1))
+        return target_ph, f"Acidificar la fase acuosa a <b>pH &le; {target_ph:.1f}</b> para protonar y transformar a su forma no ionizada a <b>{name}</b>."
+    else:
+        target_ph = min(13.0, round(pka_val + 2.0, 1))
+        return target_ph, f"Alcalinizar la fase acuosa a <b>pH &ge; {target_ph:.1f}</b> para desprotonar y liberar a <b>{name}</b> en su forma no ionizada."
+
 def generate_extraction_protocol(name_obj, char_obj, pka_obj_str, solv_obj_acid, solv_obj_basic,
                                  name_cut, char_cut, pka_cut_str, solv_cut_acid, solv_cut_basic):
     if name_obj.strip().lower() == name_cut.strip().lower():
@@ -465,12 +528,76 @@ def generate_extraction_protocol(name_obj, char_obj, pka_obj_str, solv_obj_acid,
     
     gcms_note_html = """<li style="margin-top:12px; background-color:#FFFFFF; padding:12px; border-radius:6px; border:1px solid #CBD5E1; border-left:4px solid #003366; text-align:left; list-style-type:none;"><b>⚠️ NOTA CRÍTICA PARA GC-MS:</b> Para el análisis por GC-MS, se debe utilizar <b>cloroformo de alta pureza</b> para reconstituir el extracto seco. Es indispensable <b>eliminar con extremo cuidado el agua agregando sulfato de sodio anhidro (Na<sub>2</sub>SO<sub>4</sub>)</b> y <b>filtrar minuciosamente</b> para eliminar todo residuo acuoso, protegiendo así la columna capilar y optimizando la ionización. Asimismo, la muestra reconstituida debe <b>diluirse adecuadamente (ej. proporción 1:50 a 1:100 o concentración ≤ 1 mg/mL)</b> antes de la inyección para evitar la <b>saturación del filamento y del detector de masas (MSD)</b>.</li>"""
 
+    org_solv_obj = _pick_organic_solvent(solv_obj_acid, solv_obj_basic, char_obj)
+    org_solv_cut = _pick_organic_solvent(solv_cut_acid, solv_cut_basic, char_cut)
+
+    # Caso especial: Metamizol (sal sulfonato sódica permanentemente hidrofílica e insoluble en CHCl3/Éter)
+    obj_is_metamizol = "metamizol" in name_obj.strip().lower()
+    cut_is_metamizol = "metamizol" in name_cut.strip().lower()
+
+    if cut_is_metamizol and not obj_is_metamizol:
+        target_ph, action_str = _get_optimal_neutral_ph_action(name_obj, char_obj, pkas_obj)
+        badge_html = f"""<div style="background-color:#E5E7EB; border:2px solid #003366; border-radius:8px; padding:12px; margin-bottom:15px; text-align:center;">
+<div><span style='font-weight:bold; color:#003366;'>🎯 Separación por Retención Hidrofílica Permanente (Metamizol):</span> <span style='font-size:1.15rem; font-weight:bold; color:#002244;'>pH óptimo &approx; {target_ph:.1f}</span> <span style='font-size:0.85rem; color:#4B5563;'>({name_obj} extraído en fase orgánica; Metamizol retenido en agua)</span></div>
+</div>"""
+        render_html(badge_html)
+        protocol_html = f"""<div class="forensic-card">
+<h4 style="color: #003366 !important; margin-top:0;">PASO 1: Extracción Selectiva del Analito ({name_obj}) frente a {name_cut}</h4>
+<p>{action_str}</p>
+<ul>
+<li>El adulterante <b>{name_cut}</b> es una sal metanosulfonato sódica (–SO<sub>3</sub><sup>-</sup>Na<sup>+</sup>) permanentemente hidrofílica e insoluble en cloroformo y éter, por lo que permanece retenido en la <b>fase acuosa</b> independientemente del pH.</li>
+<li>Añadir solvente orgánico adecuado para extraer el analito: <b>{org_solv_obj}</b>.</li>
+<li>Agitar vigorosamente y dejar separar las fases.</li>
+<li><span style="color:#003366; font-weight:bold;">ACCIÓN:</span> <b>Separar y conservar la fase orgánica</b> (contiene a <b>{name_obj}</b> purificado). Desechar la fase acuosa (contiene al Metamizol retenido).</li>
+</ul>
+<h4 style="color: #003366 !important; margin-top:20px;">PASO 2: Secado y Aislamiento</h4>
+<ul>
+<li>Secar la fase orgánica recolectada sobre sulfato de sodio anhidro (Na<sub>2</sub>SO<sub>4</sub>) y filtrar.</li>
+<li><b>Llevar a sequedad total</b> la fase orgánica bajo corriente controlada de nitrógeno.</li>
+</ul>
+<h4 style="color: #003366 !important; margin-top:20px;">PASO 3: Reconstitución y Lectura Instrumental</h4>
+<ul>
+<li><b>Reconstituir el residuo seco</b> para su análisis confirmatorio en <b>FTIR</b> (cristal ATR) o <b>GC-MS</b>.</li>
+{gcms_note_html}
+</ul>
+</div>"""
+        render_html(protocol_html)
+        return
+
+    if obj_is_metamizol and not cut_is_metamizol:
+        target_ph, action_str = _get_optimal_neutral_ph_action(name_cut, char_cut, pkas_cut)
+        badge_html = f"""<div style="background-color:#E5E7EB; border:2px solid #003366; border-radius:8px; padding:12px; margin-bottom:15px; text-align:center;">
+<div><span style='font-weight:bold; color:#003366;'>🧹 Lavado Orgánico de Adulterante ({name_cut}):</span> <span style='font-size:1.15rem; font-weight:bold; color:#002244;'>pH óptimo &approx; {target_ph:.1f}</span> <span style='font-size:0.85rem; color:#4B5563;'>(Metamizol retenido en fase acuosa; {name_cut} eliminado en fase orgánica)</span></div>
+</div>"""
+        render_html(badge_html)
+        protocol_html = f"""<div class="forensic-card">
+<h4 style="color: #003366 !important; margin-top:0;">PASO 1: Eliminación del Adulterante ({name_cut}) hacia Fase Orgánica</h4>
+<p>{action_str}</p>
+<ul>
+<li>A este pH, <b>{name_cut}</b> pasa a su forma no ionizada extraíble, mientras que el <b>{name_obj}</b> permanece cuantitativamente en la <b>fase acuosa</b> por su grupo sulfonato iónico.</li>
+<li>Añadir solvente orgánico para arrastrar el corte: <b>{org_solv_cut}</b>.</li>
+<li>Agitar vigorosamente y permitir la separación de fases.</li>
+<li><span style="color:#C0392B; font-weight:bold;">ACCIÓN:</span> <b>Desechar la fase orgánica</b> (contiene a {name_cut}). <b>Conservar la fase acuosa</b> donde permanece purificado el {name_obj}.</li>
+</ul>
+<h4 style="color: #003366 !important; margin-top:20px;">PASO 2: Recuperación de {name_obj} desde la Fase Acuosa</h4>
+<ul>
+<li>Neutralizar la fase acuosa purificada (pH 6.5 – 7.0) y evaporar suavemente a sequedad o recristalizar en etanol/metanol absoluto.</li>
+</ul>
+<h4 style="color: #003366 !important; margin-top:20px;">PASO 3: Análisis Confirmatorio</h4>
+<ul>
+<li>Analizar el residuo sólido purificado directamente en el cristal de diamante ATR por <b>FTIR</b> o mediante inyección metanólica en <b>GC-MS</b> (donde se detecta su producto térmico diagnóstico 4-metilaminoantipirina).</li>
+{gcms_note_html}
+</ul>
+</div>"""
+        render_html(protocol_html)
+        return
+
     if not pkas_obj and not pkas_cut:
         protocol_html = f"""<div class="forensic-card">
 <h4 style="color:#003366 !important; margin-top:0;">Protocolo de Extracción Directa por Solvente</h4>
 <p>Ninguna de las sustancias presenta equilibrios ácido-base relevantes en el intervalo analítico de pH (sustancias neutras). La separación no depende del pH acuoso.</p>
 <ul>
-<li><b>Extracción diferencial:</b> Evaluar separación por solubilidad diferencial directa usando solvente afín (ej. {solv_obj_basic}).</li>
+<li><b>Extracción diferencial:</b> Evaluar separación por solubilidad diferencial directa usando solvente orgánico afín (ej. {org_solv_obj}).</li>
 <li>Separar la fase orgánica y mantener.</li>
 <li><b>Llevar a sequedad total</b> la fase orgánica (evaporación suave bajo flujo de nitrógeno).</li>
 <li>Reconstituir el extracto para lectura en <b>FTIR / GC-MS</b>.</li>
@@ -488,9 +615,6 @@ def generate_extraction_protocol(name_obj, char_obj, pka_obj_str, solv_obj_acid,
     clean_intervals = [it for it in intervals if it[2] == 'clean']
     direct_intervals = [it for it in intervals if it[2] == 'direct']
     
-    pka_cut_val = pkas_cut[0] if pkas_cut else 7.0
-    pka_obj_val = pkas_obj[0] if pkas_obj else 7.0
-    
     badge_items = []
     if clean_intervals:
         for s, e, _ in clean_intervals:
@@ -504,30 +628,27 @@ def generate_extraction_protocol(name_obj, char_obj, pka_obj_str, solv_obj_acid,
 </div>"""
     render_html(badge_html)
 
+    def _practical_midpoint(s, e):
+        cs = max(1.0, min(13.0, s))
+        ce = max(1.0, min(13.0, e))
+        if cs <= ce:
+            return round((cs + ce) / 2.0, 1)
+        return round((s + e) / 2.0, 1)
+
     if clean_intervals:
-        clean_s, clean_e, _ = clean_intervals[0]
-        opt_clean_ph = (clean_s + clean_e) / 2.0
-        solv_cut_opt = solv_cut_acid if opt_clean_ph < pka_cut_val else solv_cut_basic
+        best_clean = max(clean_intervals, key=lambda it: it[1] - it[0])
+        clean_s, clean_e, _ = best_clean
+        opt_clean_ph = _practical_midpoint(clean_s, clean_e)
+        solv_cut_opt = org_solv_cut
         
-        char_obj_lower = char_obj.lower()
-        if 'anf' in char_obj_lower or 'dip' in char_obj_lower:
-            pi_val = sum(pkas_obj) / len(pkas_obj) if pkas_obj else 7.0
-            step2_action = f"Ajustar cuidadosamente el pH a su punto de máxima neutralidad (aprox. <b>pH {pi_val:.1f}</b>) para liberar y precipitar/extraer al analito ({name_obj})."
-            solv_step2 = solv_obj_basic if solv_obj_basic != "No especificado" else solv_obj_acid
-        elif 'ácido' in char_obj_lower or 'acido' in char_obj_lower:
-            target_ph = max(0.0, pka_obj_val - 2.0)
-            step2_action = f"Acidificar fuertemente la fase acuosa a <b>pH &lt; {target_ph:.1f}</b> para protonar y volver neutro al analito ({name_obj})."
-            solv_step2 = solv_obj_acid if solv_obj_acid != "No especificado" else "Cloroformo / Acetato de etilo"
-        else: # Base
-            target_ph = min(14.0, pka_obj_val + 2.0)
-            step2_action = f"Alcalinizar la fase acuosa a <b>pH &gt; {target_ph:.1f}</b> para desprotonar y liberar al analito ({name_obj}) como base libre."
-            solv_step2 = solv_obj_basic if solv_obj_basic != "No especificado" else "Cloroformo / Diclorometano"
+        _, step2_action = _get_optimal_neutral_ph_action(name_obj, char_obj, pkas_obj)
+        solv_step2 = org_solv_obj
 
         protocol_html = f"""<div class="forensic-card">
 <h4 style="color: #003366 !important; margin-top:0;">PASO 1: Eliminación Selectiva del Adulterante ({name_cut})</h4>
 <p>Ajustar el pH de la disolución acuosa a <b>pH {opt_clean_ph:.1f}</b> (dentro de la ventana de lavado).</p>
 <ul>
-<li>A este pH, el adulterante <b>{name_cut}</b> se encuentra en forma neutra (&gt;90%), mientras que el analito objetivo <b>{name_obj}</b> permanece ionizado (&gt;90%) retenido en la fase acuosa.</li>
+<li>A este pH, el adulterante <b>{name_cut}</b> se encuentra en forma no ionizada (&gt;90%), mientras que el analito objetivo <b>{name_obj}</b> permanece ionizado (&gt;90%) retenido en la fase acuosa.</li>
 <li>Añadir solvente orgánico para extraer el corte: <b>{solv_cut_opt}</b>.</li>
 <li>Agitar vigorosamente y permitir la completa decantación de fases.</li>
 <li><span style="color:#C0392B; font-weight:bold;">ACCIÓN:</span> <b>Desechar la fase orgánica</b> (que arrastra el adulterante eliminado). <b>Conservar únicamente la fase acuosa</b> (donde permanece purificado el analito {name_obj}).</li>
@@ -548,16 +669,16 @@ def generate_extraction_protocol(name_obj, char_obj, pka_obj_str, solv_obj_acid,
 </ul>
 </div>"""
     else:
-        dir_s, dir_e, _ = direct_intervals[0]
-        opt_dir_ph = (dir_s + dir_e) / 2.0
-        solv_step1 = solv_obj_acid if opt_dir_ph < pka_obj_val else solv_obj_basic
-        if solv_step1 == "No especificado": solv_step1 = "Cloroformo / Diclorometano"
+        best_dir = max(direct_intervals, key=lambda it: it[1] - it[0])
+        dir_s, dir_e, _ = best_dir
+        opt_dir_ph = _practical_midpoint(dir_s, dir_e)
+        solv_step1 = org_solv_obj
 
         protocol_html = f"""<div class="forensic-card">
 <h4 style="color: #003366 !important; margin-top:0;">PASO 1: Extracción Directa del Analito ({name_obj})</h4>
 <p>Ajustar el pH de la disolución acuosa a <b>pH {opt_dir_ph:.1f}</b> (dentro de la ventana de extracción).</p>
 <ul>
-<li>A este pH, el analito <b>{name_obj}</b> se encuentra en su forma neutra (&gt;90%), mientras que el adulterante <b>{name_cut}</b> permanece ionizado (&gt;90%) y queda retenido en la fase acuosa.</li>
+<li>A este pH, el analito <b>{name_obj}</b> se encuentra en su forma no ionizada (&gt;90%), mientras que el adulterante <b>{name_cut}</b> permanece ionizado (&gt;90%) y queda retenido en la fase acuosa.</li>
 <li>Añadir solvente orgánico adecuado para el analito: <b>{solv_step1}</b>.</li>
 <li>Agitar y dejar separar las fases.</li>
 <li><span style="color:#003366; font-weight:bold;">ACCIÓN:</span> <b>Separar y conservar la fase orgánica</b> (que contiene al analito {name_obj} purificado). Desechar la fase acuosa con el adulterante.</li>
@@ -732,15 +853,19 @@ def tab2_arbol_decision():
     render_analytical_note()
 
 REAGENT_RESULTS = {
+    "mayer": [
+        {"test": "Prueba de Mayer", "color_desc": "Precipitado blanco a blanco-crema inmediato", "target": "Alcaloides y Aminas Terciarias (Cocaína, Heroína, Codeína, Ketamina)", "bg": "#F8FAFC"},
+        {"test": "Prueba de Mayer", "color_desc": "Solución transparente (Sin precipitado)", "target": "Compuestos Neutros o Ácidos (Barbitúricos, THC - Negativo)", "bg": "#9CA3AF"}
+    ],
     "marquis": [
-        {"test": "Prueba de Marquis", "color_desc": "Verde brillante / Esmeralda", "target": "2C-B", "bg": "#27AE60"},
+        {"test": "Prueba de Marquis", "color_desc": "Amarillo → Verde brillante / Esmeralda", "target": "2C-B", "bg": "#27AE60"},
         {"test": "Prueba de Marquis", "color_desc": "Negro violáceo inmediato", "target": "MDMA / MDA (Éxtasis)", "bg": "#1A1A1A"},
         {"test": "Prueba de Marquis", "color_desc": "Naranja → Marrón rojizo", "target": "Metanfetamina", "bg": "linear-gradient(to right, #FF8C00, #D35400, #5C2C16)"},
-        {"test": "Prueba de Marquis", "color_desc": "Naranja brillante → Rojo anaranjado", "target": "Anfetamina", "bg": "#E67E22"},
+        {"test": "Prueba de Marquis", "color_desc": "Naranja brillante → Marrón", "target": "Anfetamina", "bg": "#E67E22"},
         {"test": "Prueba de Marquis", "color_desc": "Naranja claro / Ocre", "target": "Fentanilo", "bg": "#D4AC0D"},
         {"test": "Prueba de Marquis", "color_desc": "Púrpura / Violeta oscuro", "target": "Opiáceos (Heroína / Morfina)", "bg": "#5B2C6F"},
         {"test": "Prueba de Marquis", "color_desc": "Violeta a Púrpura", "target": "Codeína", "bg": "#4A235A"},
-        {"test": "Prueba de Marquis", "color_desc": "Rosa tenue a Rojo lento con calor", "target": "Salicilatos (Aspirina)", "bg": "#F1948A"}
+        {"test": "Prueba de Marquis", "color_desc": "Naranja al calentar a 100 °C", "target": "Ibuprofeno / Naproxeno", "bg": "#E67E22"}
     ],
     "mecke": [
         {"test": "Prueba de Mecke", "color_desc": "Verde azulado profundo virando a Negro", "target": "Heroína / Morfina / Codeína", "bg": "#117A65"},
@@ -748,9 +873,9 @@ REAGENT_RESULTS = {
         {"test": "Prueba de Mecke", "color_desc": "Marrón a Pardo rojizo", "target": "Mescalina / Fenetilaminas", "bg": "#B9770E"}
     ],
     "simon": [
-        {"test": "Prueba de Simon", "color_desc": "Azul cobalto intenso inmediato", "target": "Metanfetamina (Amina Secundaria)", "bg": "#0047AB"},
+        {"test": "Prueba de Simon", "color_desc": "Azul cobalto intenso inmediato", "target": "Metanfetamina / Efedrina (Aminas Secundarias)", "bg": "#0047AB"},
         {"test": "Prueba de Simon", "color_desc": "Azul cobalto intenso inmediato", "target": "MDMA (Amina Secundaria)", "bg": "#0047AB"},
-        {"test": "Prueba de Simon", "color_desc": "Sin reacción / Incoloro o pálido", "target": "Anfetamina / MDA (Aminas Primarias - Negativo)", "bg": "#D1D5DB"}
+        {"test": "Prueba de Simon", "color_desc": "Sin reacción / Incoloro", "target": "Anfetamina / MDA (Aminas Primarias - Negativo)", "bg": "#D1D5DB"}
     ],
     "scott": [
         {"test": "Prueba de Scott", "color_desc": "Bifásico: Rosa superior (acuosa) / Azul inferior (cloroformo)", "target": "Cocaína (HCl / Base Libre)", "bg": "", "is_biphasic": True, "top_bg": "#F5B7B1", "bot_bg": "#0047AB", "top_txt": "Fase Acuosa (Rosa)", "bot_txt": "Fase Cloroformo (Azul)"}
@@ -769,23 +894,32 @@ REAGENT_RESULTS = {
         {"test": "Prueba de Dille-Koppanyi", "color_desc": "Púrpura claro / Violeta", "target": "Barbitúricos (Fenobarbital)", "bg": "#C8A2C8"}
     ],
     "mandelin": [
+        {"test": "Prueba de Mandelin", "color_desc": "Verde → Azul oscuro / Negro violáceo", "target": "MDA / MDMA", "bg": "#1B4F72"},
         {"test": "Prueba de Mandelin", "color_desc": "Verde oliva a Verde oscuro", "target": "Metanfetamina / Anfetamina", "bg": "#2E4F28"},
-        {"test": "Prueba de Mandelin", "color_desc": "Azul grisáceo a Violeta oscuro", "target": "Opiáceos (Morfina / Heroína)", "bg": "#2E4053"},
-        {"test": "Prueba de Mandelin", "color_desc": "Naranja rojizo tenue", "target": "Ketamina", "bg": "#E59866"}
+        {"test": "Prueba de Mandelin", "color_desc": "Azul grisáceo a Violeta oscuro", "target": "Opiáceos (Morfina / Heroína / Codeína)", "bg": "#2E4053"}
+    ],
+    "forrest": [
+        {"test": "Prueba de Forrest", "color_desc": "Azul-verde", "target": "Ketamina / Imipramina", "bg": "#117A65"},
+        {"test": "Yodoplatinato Acidificado", "color_desc": "Precipitado púrpura-rojizo a azul-grisáceo", "target": "Ketamina y Alcaloides Terciarios", "bg": "#5B2C6F"}
+    ],
+    "formaldehído": [
+        {"test": "Formaldehído-Ácido Sulfúrico", "color_desc": "Naranja brillante a 100 °C", "target": "Clonazepam / Diazepam / Flunitrazepam", "bg": "#E67E22"},
+        {"test": "Formaldehído-Ácido Sulfúrico", "color_desc": "Incoloro / Sin reacción a 100 °C", "target": "Alprazolam (Negativo)", "bg": "#D1D5DB"}
     ],
     "liebermann": [
-        {"test": "Prueba de Liebermann", "color_desc": "Negro / Marrón oscuro", "target": "Heroína / Morfina", "bg": "#1C2833"},
-        {"test": "Prueba de Liebermann", "color_desc": "Violeta a Púrpura", "target": "Paracetamol / Fenacetina", "bg": "#6C3483"},
-        {"test": "Prueba de Liebermann", "color_desc": "Amarillo tenue a Incoloro", "target": "Cocaína", "bg": "#F9E79F"}
+        {"test": "Prueba de Liebermann", "color_desc": "Violeta a Púrpura", "target": "Fenacetina / Paracetamol", "bg": "#6C3483"},
+        {"test": "Prueba de Liebermann", "color_desc": "Rojo-Naranja brillante", "target": "Efedrina / Levamisol", "bg": "#D35400"},
+        {"test": "Prueba de Liebermann", "color_desc": "Negro / Marrón oscuro", "target": "Heroína / Morfina / Naproxeno", "bg": "#1C2833"},
+        {"test": "Prueba de Liebermann", "color_desc": "Amarillo tenue (Cocaína HCl)", "target": "Cocaína", "bg": "#F9E79F"}
     ],
     "férrico": [
-        {"test": "Prueba de Cloruro Férrico", "color_desc": "Violeta púrpura intenso", "target": "Salicilatos (tras hidrólisis) / Fenoles", "bg": "#512E5F"}
+        {"test": "Prueba de Cloruro Férrico", "color_desc": "Violeta púrpura intenso", "target": "Metamizol / Salicilatos (tras hidrólisis)", "bg": "#512E5F"}
     ],
     "ferrico": [
-        {"test": "Prueba de Cloruro Férrico", "color_desc": "Violeta púrpura intenso", "target": "Salicilatos (tras hidrólisis) / Fenoles", "bg": "#512E5F"}
+        {"test": "Prueba de Cloruro Férrico", "color_desc": "Violeta púrpura intenso", "target": "Metamizol / Salicilatos (tras hidrólisis)", "bg": "#512E5F"}
     ],
     "mcnally": [
-        {"test": "Prueba de McNally", "color_desc": "Rojo cereza / Rojo vino en interfase caliente", "target": "Salicilatos", "bg": "#922B21"}
+        {"test": "Prueba de McNally", "color_desc": "Rojo cereza tras hidrólisis y calentamiento a 100 °C", "target": "Ácido Acetilsalicílico (Aspirina) / Salicilatos", "bg": "#922B21"}
     ],
     "amálico": [
         {"test": "Prueba de Murexida", "color_desc": "Púrpura rojizo brillante con vapor de amonio", "target": "Xantinas (Cafeína)", "bg": "#7D3C98"}
@@ -795,6 +929,9 @@ REAGENT_RESULTS = {
     ],
     "zimmerman": [
         {"test": "Prueba de Zimmerman", "color_desc": "Rosa rojizo / Púrpura rojizo", "target": "Benzodiazepinas (Diazepam)", "bg": "#C0392B"}
+    ],
+    "cobalto": [
+        {"test": "Prueba de Nitrato de Cobalto (1%)", "color_desc": "Rosa a Violeta", "target": "GHB (Gamma-hidroxibutirato)", "bg": "#9B59B6"}
     ]
 }
 
@@ -890,40 +1027,43 @@ def tab4_fisicoquimica(data, selected_sustancia, selected_adulterante, selected_
     solv_obj = get_solvent(info_obj, pka_obj, selected_ph)
     solv_cut = get_solvent(info_cut, pka_cut, selected_ph)
     
+    if "metamizol" in selected_sustancia.lower() or "metamizol" in selected_adulterante.lower():
+        st.info("ℹ️ **Nota Pericial de Partición (Metamizol / Dipirona):** Aunque el anillo pirazolónico presenta un $pK_a = 1.84$, el Metamizol es una **sal metanosulfonato sódica ($\\text{-SO}_3^-\\text{Na}^+$)** permanentemente iónica e hidrofílica (soluble 1 en 1.5 de agua, prácticamente insoluble en cloroformo y éter). Por tanto, permanece retenido en la **Fase Acuosa** en todo el intervalo de pH, permitiendo extraer selectivamente alcaloides lipofílicos hacia la fase orgánica.")
+    
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(f'<div class="forensic-card" style="border-left: 4px solid #003366;"><h4 style="color: #003366 !important; margin-top:0;">🎯 Analito Objetivo: {selected_sustancia}</h4><p style="margin-bottom:5px;"><b>Carácter:</b> {char_obj}</p><p style="margin-bottom:5px;"><b>pKa:</b> <span class="numeric-val">{pka_obj}</span></p><p style="margin-bottom:15px;"><b>Disolvente Recomendado (pH {selected_ph}):</b> {solv_obj}</p><hr style="border-color:#D1D5DB; margin: 10px 0;"><p style="margin-bottom:5px;"><b>% Ionizado (Fase Acuosa):</b> <span class="numeric-val">{i_obj_curr:.2f}%</span></p><p style="margin-bottom:0;"><b>% Neutro (Fase Orgánica):</b> <span class="numeric-val">{n_obj_curr:.2f}%</span></p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="forensic-card" style="border-left: 4px solid #003366;"><h4 style="color: #003366 !important; margin-top:0;">🎯 Analito Objetivo: {selected_sustancia}</h4><p style="margin-bottom:5px;"><b>Carácter:</b> {char_obj}</p><p style="margin-bottom:5px;"><b>pKa:</b> <span class="numeric-val">{pka_obj}</span></p><p style="margin-bottom:15px;"><b>Disolvente Recomendado (pH {selected_ph}):</b> {solv_obj}</p><hr style="border-color:#D1D5DB; margin: 10px 0;"><p style="margin-bottom:5px;"><b>% Especie Ionizada (Fase Acuosa):</b> <span class="numeric-val">{i_obj_curr:.2f}%</span></p><p style="margin-bottom:0;"><b>% Especie No Ionizada (Fase Orgánica):</b> <span class="numeric-val">{n_obj_curr:.2f}%</span></p></div>', unsafe_allow_html=True)
     with col2:
-        st.markdown(f'<div class="forensic-card" style="border-left: 4px solid #C0392B;"><h4 style="color: #C0392B !important; margin-top:0;">✂️ Adulterante: {selected_adulterante}</h4><p style="margin-bottom:5px;"><b>Carácter:</b> {char_cut}</p><p style="margin-bottom:5px;"><b>pKa:</b> <span class="numeric-val">{pka_cut}</span></p><p style="margin-bottom:15px;"><b>Disolvente Recomendado (pH {selected_ph}):</b> {solv_cut}</p><hr style="border-color:#D1D5DB; margin: 10px 0;"><p style="margin-bottom:5px;"><b>% Ionizado (Fase Acuosa):</b> <span class="numeric-val">{i_cut_curr:.2f}%</span></p><p style="margin-bottom:0;"><b>% Neutro (Fase Orgánica):</b> <span class="numeric-val">{n_cut_curr:.2f}%</span></p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="forensic-card" style="border-left: 4px solid #C0392B;"><h4 style="color: #C0392B !important; margin-top:0;">✂️ Adulterante: {selected_adulterante}</h4><p style="margin-bottom:5px;"><b>Carácter:</b> {char_cut}</p><p style="margin-bottom:5px;"><b>pKa:</b> <span class="numeric-val">{pka_cut}</span></p><p style="margin-bottom:15px;"><b>Disolvente Recomendado (pH {selected_ph}):</b> {solv_cut}</p><hr style="border-color:#D1D5DB; margin: 10px 0;"><p style="margin-bottom:5px;"><b>% Especie Ionizada (Fase Acuosa):</b> <span class="numeric-val">{i_cut_curr:.2f}%</span></p><p style="margin-bottom:0;"><b>% Especie No Ionizada (Fase Orgánica):</b> <span class="numeric-val">{n_cut_curr:.2f}%</span></p></div>', unsafe_allow_html=True)
         
     chart_data = []
     for ph_val in [x/10.0 for x in range(0, 141, 2)]:
         i_o, n_o = calculate_ionization(pka_obj, char_obj, ph_val)
         i_c, n_c = calculate_ionization(pka_cut, char_cut, ph_val)
         chart_data.extend([
-            {"pH": ph_val, "% Especie": i_o, "Sustancia": "Objetivo (Ionizado - Agua)", "Categoría": "Objetivo"}, 
-            {"pH": ph_val, "% Especie": n_o, "Sustancia": "Objetivo (Neutro - Orgánico)", "Categoría": "Objetivo"}, 
-            {"pH": ph_val, "% Especie": i_c, "Sustancia": "Corte (Ionizado - Agua)", "Categoría": "Adulterante"}, 
-            {"pH": ph_val, "% Especie": n_c, "Sustancia": "Corte (Neutro - Orgánico)", "Categoría": "Adulterante"}
+            {"pH": ph_val, "% Especie": i_o, "Sustancia": "Objetivo (Ionizada - Agua)", "Categoría": "Objetivo"}, 
+            {"pH": ph_val, "% Especie": n_o, "Sustancia": "Objetivo (No Ionizada - Orgánico)", "Categoría": "Objetivo"}, 
+            {"pH": ph_val, "% Especie": i_c, "Sustancia": "Corte (Ionizada - Agua)", "Categoría": "Adulterante"}, 
+            {"pH": ph_val, "% Especie": n_c, "Sustancia": "Corte (No Ionizada - Orgánico)", "Categoría": "Adulterante"}
         ])
         
     point_data = [
-        {"pH": selected_ph, "% Especie": i_obj_curr, "Sustancia": "Objetivo (Ionizado - Agua)", "Categoría": "Objetivo"}, 
-        {"pH": selected_ph, "% Especie": n_obj_curr, "Sustancia": "Objetivo (Neutro - Orgánico)", "Categoría": "Objetivo"}, 
-        {"pH": selected_ph, "% Especie": i_cut_curr, "Sustancia": "Corte (Ionizado - Agua)", "Categoría": "Adulterante"}, 
-        {"pH": selected_ph, "% Especie": n_cut_curr, "Sustancia": "Corte (Neutro - Orgánico)", "Categoría": "Adulterante"}
+        {"pH": selected_ph, "% Especie": i_obj_curr, "Sustancia": "Objetivo (Ionizada - Agua)", "Categoría": "Objetivo"}, 
+        {"pH": selected_ph, "% Especie": n_obj_curr, "Sustancia": "Objetivo (No Ionizada - Orgánico)", "Categoría": "Objetivo"}, 
+        {"pH": selected_ph, "% Especie": i_cut_curr, "Sustancia": "Corte (Ionizada - Agua)", "Categoría": "Adulterante"}, 
+        {"pH": selected_ph, "% Especie": n_cut_curr, "Sustancia": "Corte (No Ionizada - Orgánico)", "Categoría": "Adulterante"}
     ]
     
     base_chart = alt.Chart(alt.Data(values=chart_data)).mark_line(interpolate='monotone', strokeWidth=3).encode(
         x=alt.X('pH:Q', scale=alt.Scale(domain=[0, 14]), title="pH del Medio", axis=alt.Axis(gridColor="#E2E8F0", labelColor="#003366", titleColor="#003366")),
         y=alt.Y('% Especie:Q', scale=alt.Scale(domain=[0, 100]), title="% Relativo de la Especie", axis=alt.Axis(gridColor="#E2E8F0", labelColor="#003366", titleColor="#003366")),
-        color=alt.Color('Sustancia:N', scale=alt.Scale(domain=['Objetivo (Ionizado - Agua)', 'Objetivo (Neutro - Orgánico)', 'Corte (Ionizado - Agua)', 'Corte (Neutro - Orgánico)'], range=['#003366', '#D97706', '#C0392B', '#4B5563']), legend=alt.Legend(title="Especies", titleColor="#003366", labelColor="#003366", orient="bottom")),
+        color=alt.Color('Sustancia:N', scale=alt.Scale(domain=['Objetivo (Ionizada - Agua)', 'Objetivo (No Ionizada - Orgánico)', 'Corte (Ionizada - Agua)', 'Corte (No Ionizada - Orgánico)'], range=['#003366', '#D97706', '#C0392B', '#4B5563']), legend=alt.Legend(title="Especies", titleColor="#003366", labelColor="#003366", orient="bottom")),
         strokeDash=alt.condition(alt.datum.Categoría == 'Adulterante', alt.value([5, 5]), alt.value([0]))
     ).properties(height=450)
     
     point_chart = alt.Chart(alt.Data(values=point_data)).mark_circle(size=150, opacity=1, stroke="#fff", strokeWidth=2).encode(
         x='pH:Q', y='% Especie:Q', 
-        color=alt.Color('Sustancia:N', scale=alt.Scale(domain=['Objetivo (Ionizado - Agua)', 'Objetivo (Neutro - Orgánico)', 'Corte (Ionizado - Agua)', 'Corte (Neutro - Orgánico)'], range=['#003366', '#D97706', '#C0392B', '#4B5563']), legend=None), 
+        color=alt.Color('Sustancia:N', scale=alt.Scale(domain=['Objetivo (Ionizada - Agua)', 'Objetivo (No Ionizada - Orgánico)', 'Corte (Ionizada - Agua)', 'Corte (No Ionizada - Orgánico)'], range=['#003366', '#D97706', '#C0392B', '#4B5563']), legend=None), 
         tooltip=['pH:Q', '% Especie:Q', 'Sustancia:N']
     )
     rule = alt.Chart(alt.Data(values=[{"pH": selected_ph}])).mark_rule(strokeDash=[3, 3], color='#003366', strokeWidth=1).encode(x='pH:Q')
@@ -975,13 +1115,13 @@ def validate_manual_pka(pka_input, char_input, label):
             return False, [], f"⚠️ No se ingresaron valores válidos para {label}: El valor '{p}' no es numérico. Ingrese valores numéricos en el formato adecuado '(ph1, ph2)' o '(pKa1, pKa2)' (ejemplo: '8.6' o '1.5, 10.5')."
             
     char_low = char_input.lower()
-    is_diprotic = 'dipr' in char_low
+    is_diprotic = 'anf' in char_low or 'dipr' in char_low
     
     if is_diprotic and len(pkas) < 2:
-        return False, [], f"⚠️ Ha seleccionado el carácter 'Diprótico' para {label}: Debe ingresar dos equilibrios en el formato adecuado '(ph1, ph2)' o '(pKa1, pKa2)' con coma y espacio (ejemplo: '1.5, 10.5')."
+        return False, [], f"⚠️ Ha seleccionado el carácter 'Anfótero (2 pKa)' para {label}: Debe ingresar dos equilibrios en el formato adecuado '(ph1, ph2)' o '(pKa1, pKa2)' con coma y espacio (ejemplo: '1.5, 10.5')."
         
     if len(pkas) >= 2 and not is_diprotic:
-        return False, [], f"⚠️ Ha ingresado dos valores para {label}: Para modelar ambos equilibrios en la curva de especiación, seleccione el carácter 'Diprótico' en el menú desplegable."
+        return False, [], f"⚠️ Ha ingresado dos valores para {label}: Para modelar ambos equilibrios en la curva de especiación, seleccione el carácter 'Anfótero (2 pKa)' en el menú desplegable."
 
     if len(pkas) >= 2:
         p1, p2 = pkas[0], pkas[1]
@@ -1000,7 +1140,7 @@ def tab5_simulador_manual():
     with c1:
         st.markdown("<div class='forensic-card' style='border-left: 4px solid #003366;'><h4 style='color:#003366 !important; margin-top:0;'>🎯 Parámetros del Analito Objetivo</h4>", unsafe_allow_html=True)
         man_name_obj = st.text_input("Nombre del Analito Objetivo", value="Cocaína", key="m_n_obj")
-        man_char_obj = st.selectbox("Carácter Químico", ["Base débil", "Ácido débil", "Diprótico"], index=0, key="m_c_obj")
+        man_char_obj = st.selectbox("Carácter Químico", ["Base débil", "Ácido débil", "Anfótero (2 pKa)"], index=0, key="m_c_obj")
         man_pka_obj = st.text_input("pKa (uno o dos valores, ej: 8.6 o 1.5, 10.5)", value="8.6", key="m_p_obj")
         man_solv_obj_acid = st.text_input("Disolvente a pH < pKa (Medio Ácido)", value="Agua (Fase Acuosa)", key="m_s_oa")
         man_solv_obj_base = st.text_input("Disolvente a pH > pKa (Medio Básico)", value="Cloroformo / Diclorometano", key="m_s_ob")
@@ -1009,10 +1149,10 @@ def tab5_simulador_manual():
     with c2:
         st.markdown("<div class='forensic-card' style='border-left: 4px solid #C0392B;'><h4 style='color:#C0392B !important; margin-top:0;'>✂️ Parámetros del Adulterante (Corte)</h4>", unsafe_allow_html=True)
         man_name_cut = st.text_input("Nombre del Adulterante", value="Fenacetina", key="m_n_cut")
-        man_char_cut = st.selectbox("Carácter Químico", ["Base débil", "Ácido débil", "Diprótico"], index=1, key="m_c_cut")
+        man_char_cut = st.selectbox("Carácter Químico", ["Base débil", "Ácido débil", "Anfótero (2 pKa)"], index=0, key="m_c_cut")
         man_pka_cut = st.text_input("pKa (uno o dos valores, ej: 2.2 o 4.4, 5.2)", value="2.2", key="m_p_cut")
-        man_solv_cut_acid = st.text_input("Disolvente a pH < pKa (Medio Ácido)", value="Diclorometano", key="m_s_ca")
-        man_solv_cut_base = st.text_input("Disolvente a pH > pKa (Medio Básico)", value="Éter etílico", key="m_s_cb")
+        man_solv_cut_acid = st.text_input("Disolvente a pH < pKa (Medio Ácido)", value="Agua (Fase Acuosa)", key="m_s_ca")
+        man_solv_cut_base = st.text_input("Disolvente a pH > pKa (Medio Básico)", value="Cloroformo / Éter etílico", key="m_s_cb")
         st.markdown("</div>", unsafe_allow_html=True)
         
     man_ph = st.slider("🧪 pH de Simulación Actual", 0.0, 14.0, 7.0, 0.1, key="m_ph_slider")
@@ -1032,9 +1172,9 @@ def tab5_simulador_manual():
     
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(f'<div class="forensic-card" style="border-left: 4px solid #003366;"><h4 style="color: #003366 !important; margin-top:0;">🎯 {man_name_obj} (pH {man_ph:.1f})</h4><p style="margin-bottom:5px;"><b>Carácter:</b> {man_char_obj} | <b>pKa:</b> <span class="numeric-val">{man_pka_obj}</span></p><hr style="border-color:#D1D5DB; margin: 10px 0;"><p style="margin-bottom:5px;"><b>% Ionizado (Fase Acuosa):</b> <span class="numeric-val">{i_obj:.2f}%</span></p><p style="margin-bottom:0;"><b>% Neutro (Fase Orgánica):</b> <span class="numeric-val">{n_obj:.2f}%</span></p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="forensic-card" style="border-left: 4px solid #003366;"><h4 style="color: #003366 !important; margin-top:0;">🎯 {man_name_obj} (pH {man_ph:.1f})</h4><p style="margin-bottom:5px;"><b>Carácter:</b> {man_char_obj} | <b>pKa:</b> <span class="numeric-val">{man_pka_obj}</span></p><hr style="border-color:#D1D5DB; margin: 10px 0;"><p style="margin-bottom:5px;"><b>% Especie Ionizada (Fase Acuosa):</b> <span class="numeric-val">{i_obj:.2f}%</span></p><p style="margin-bottom:0;"><b>% Especie No Ionizada (Fase Orgánica):</b> <span class="numeric-val">{n_obj:.2f}%</span></p></div>', unsafe_allow_html=True)
     with col2:
-        st.markdown(f'<div class="forensic-card" style="border-left: 4px solid #C0392B;"><h4 style="color: #C0392B !important; margin-top:0;">✂️ {man_name_cut} (pH {man_ph:.1f})</h4><p style="margin-bottom:5px;"><b>Carácter:</b> {man_char_cut} | <b>pKa:</b> <span class="numeric-val">{man_pka_cut}</span></p><hr style="border-color:#D1D5DB; margin: 10px 0;"><p style="margin-bottom:5px;"><b>% Ionizado (Fase Acuosa):</b> <span class="numeric-val">{i_cut:.2f}%</span></p><p style="margin-bottom:0;"><b>% Neutro (Fase Orgánica):</b> <span class="numeric-val">{n_cut:.2f}%</span></p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="forensic-card" style="border-left: 4px solid #C0392B;"><h4 style="color: #C0392B !important; margin-top:0;">✂️ {man_name_cut} (pH {man_ph:.1f})</h4><p style="margin-bottom:5px;"><b>Carácter:</b> {man_char_cut} | <b>pKa:</b> <span class="numeric-val">{man_pka_cut}</span></p><hr style="border-color:#D1D5DB; margin: 10px 0;"><p style="margin-bottom:5px;"><b>% Especie Ionizada (Fase Acuosa):</b> <span class="numeric-val">{i_cut:.2f}%</span></p><p style="margin-bottom:0;"><b>% Especie No Ionizada (Fase Orgánica):</b> <span class="numeric-val">{n_cut:.2f}%</span></p></div>', unsafe_allow_html=True)
 
     chart_data = []
     for p in range(0, 141, 2):
@@ -1042,29 +1182,29 @@ def tab5_simulador_manual():
         io, no = calculate_ionization(man_pka_obj, man_char_obj, ph_val)
         ic, nc = calculate_ionization(man_pka_cut, man_char_cut, ph_val)
         chart_data.extend([
-            {"pH": ph_val, "% Especie": io, "Sustancia": f"{man_name_obj} (Ionizado - Agua)", "Categoría": "Objetivo"},
-            {"pH": ph_val, "% Especie": no, "Sustancia": f"{man_name_obj} (Neutro - Orgánico)", "Categoría": "Objetivo"},
-            {"pH": ph_val, "% Especie": ic, "Sustancia": f"{man_name_cut} (Ionizado - Agua)", "Categoría": "Adulterante"},
-            {"pH": ph_val, "% Especie": nc, "Sustancia": f"{man_name_cut} (Neutro - Orgánico)", "Categoría": "Adulterante"}
+            {"pH": ph_val, "% Especie": io, "Sustancia": f"{man_name_obj} (Ionizada - Agua)", "Categoría": "Objetivo"},
+            {"pH": ph_val, "% Especie": no, "Sustancia": f"{man_name_obj} (No Ionizada - Orgánico)", "Categoría": "Objetivo"},
+            {"pH": ph_val, "% Especie": ic, "Sustancia": f"{man_name_cut} (Ionizada - Agua)", "Categoría": "Adulterante"},
+            {"pH": ph_val, "% Especie": nc, "Sustancia": f"{man_name_cut} (No Ionizada - Orgánico)", "Categoría": "Adulterante"}
         ])
         
     point_data = [
-        {"pH": man_ph, "% Especie": i_obj, "Sustancia": f"{man_name_obj} (Ionizado - Agua)", "Categoría": "Objetivo"},
-        {"pH": man_ph, "% Especie": n_obj, "Sustancia": f"{man_name_obj} (Neutro - Orgánico)", "Categoría": "Objetivo"},
-        {"pH": man_ph, "% Especie": i_cut, "Sustancia": f"{man_name_cut} (Ionizado - Agua)", "Categoría": "Adulterante"},
-        {"pH": man_ph, "% Especie": n_cut, "Sustancia": f"{man_name_cut} (Neutro - Orgánico)", "Categoría": "Adulterante"}
+        {"pH": man_ph, "% Especie": i_obj, "Sustancia": f"{man_name_obj} (Ionizada - Agua)", "Categoría": "Objetivo"},
+        {"pH": man_ph, "% Especie": n_obj, "Sustancia": f"{man_name_obj} (No Ionizada - Orgánico)", "Categoría": "Objetivo"},
+        {"pH": man_ph, "% Especie": i_cut, "Sustancia": f"{man_name_cut} (Ionizada - Agua)", "Categoría": "Adulterante"},
+        {"pH": man_ph, "% Especie": n_cut, "Sustancia": f"{man_name_cut} (No Ionizada - Orgánico)", "Categoría": "Adulterante"}
     ]
     
     base_chart = alt.Chart(alt.Data(values=chart_data)).mark_line(interpolate='monotone', strokeWidth=3).encode(
         x=alt.X('pH:Q', scale=alt.Scale(domain=[0, 14]), title="pH del Medio", axis=alt.Axis(gridColor="#E2E8F0", labelColor="#003366", titleColor="#003366")),
         y=alt.Y('% Especie:Q', scale=alt.Scale(domain=[0, 100]), title="% Relativo de la Especie", axis=alt.Axis(gridColor="#E2E8F0", labelColor="#003366", titleColor="#003366")),
-        color=alt.Color('Sustancia:N', scale=alt.Scale(domain=[f"{man_name_obj} (Ionizado - Agua)", f"{man_name_obj} (Neutro - Orgánico)", f"{man_name_cut} (Ionizado - Agua)", f"{man_name_cut} (Neutro - Orgánico)"], range=['#003366', '#D97706', '#C0392B', '#4B5563']), legend=alt.Legend(title="Especies", titleColor="#003366", labelColor="#003366", orient="bottom")),
+        color=alt.Color('Sustancia:N', scale=alt.Scale(domain=[f"{man_name_obj} (Ionizada - Agua)", f"{man_name_obj} (No Ionizada - Orgánico)", f"{man_name_cut} (Ionizada - Agua)", f"{man_name_cut} (No Ionizada - Orgánico)"], range=['#003366', '#D97706', '#C0392B', '#4B5563']), legend=alt.Legend(title="Especies", titleColor="#003366", labelColor="#003366", orient="bottom")),
         strokeDash=alt.condition(alt.datum.Categoría == 'Adulterante', alt.value([5, 5]), alt.value([0]))
     ).properties(height=450)
     
     point_chart = alt.Chart(alt.Data(values=point_data)).mark_circle(size=150, opacity=1, stroke="#fff", strokeWidth=2).encode(
         x='pH:Q', y='% Especie:Q',
-        color=alt.Color('Sustancia:N', scale=alt.Scale(domain=[f"{man_name_obj} (Ionizado - Agua)", f"{man_name_obj} (Neutro - Orgánico)", f"{man_name_cut} (Ionizado - Agua)", f"{man_name_cut} (Neutro - Orgánico)"], range=['#003366', '#D97706', '#C0392B', '#4B5563']), legend=None),
+        color=alt.Color('Sustancia:N', scale=alt.Scale(domain=[f"{man_name_obj} (Ionizada - Agua)", f"{man_name_obj} (No Ionizada - Orgánico)", f"{man_name_cut} (Ionizada - Agua)", f"{man_name_cut} (No Ionizada - Orgánico)"], range=['#003366', '#D97706', '#C0392B', '#4B5563']), legend=None),
         tooltip=['pH:Q', '% Especie:Q', 'Sustancia:N']
     )
     rule = alt.Chart(alt.Data(values=[{"pH": man_ph}])).mark_rule(strokeDash=[3, 3], color='#003366', strokeWidth=1).encode(x='pH:Q')
@@ -1083,47 +1223,1549 @@ def tab5_simulador_manual():
     generate_extraction_protocol(man_name_obj, man_char_obj, man_pka_obj, man_solv_obj_acid, man_solv_obj_base,
                                  man_name_cut, man_char_cut, man_pka_cut, man_solv_cut_acid, man_solv_cut_base)
 
+def render_step_flow(steps):
+    flow_html = '<div style="display:flex; justify-content:center; align-items:stretch; flex-wrap:wrap; gap:14px; margin:20px 0;">'
+    for idx, step in enumerate(steps):
+        title_html = f'<div style="font-weight:700; font-size:0.9rem; color:#002244; margin-bottom:6px;">{step["title"]}</div>' if step.get("title") else ""
+        conc_badge = f'<div style="margin-top:8px; padding:4px 8px; background-color:#D1D5DB; border-radius:6px; font-family:\'Courier New\', monospace; font-size:0.8rem; font-weight:bold; color:#002244;">{step["conc"]}</div>' if step.get("conc") else ""
+        flow_html += f'''
+        <div class="forensic-card" style="width:235px; padding:15px; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:space-between;">
+            <div style="width:36px; height:36px; border-radius:50%; background:#003366; color:#ffffff; display:flex; align-items:center; justify-content:center; font-weight:bold; margin-bottom:10px; font-size:1rem;">{idx+1}</div>
+            {title_html}
+            <div style="font-size:0.84rem; text-align:center; color:#003366; line-height:1.4;">{step["desc"]}</div>
+            {conc_badge}
+        </div>
+        '''
+        if idx < len(steps) - 1:
+            flow_html += '<div style="font-size:1.8rem; color:#003366; display:flex; align-items:center; justify-content:center;">➡️</div>'
+    flow_html += '</div>'
+    render_html(flow_html)
+
+
+
+def render_analytical_note_tox():
+    st.markdown('''
+    <div class="nota-card">
+        <b>⚠️ NOTA ANALÍTICA:</b> Etiquetar cada solución con identificación, concentración, matriz, lote, fecha de preparación y responsable de su elaboración. Tapar con Parafilm y conservar de <b>4 °C a 8 °C</b> hasta su uso.
+    </div>
+    ''', unsafe_allow_html=True)
+
+SOLVENT_PROPERTIES = {
+    "1-Propanol": {
+        "nombre": "1-Propanol",
+        "densidad_g_ml": 0.804
+    },
+    "Etanol": {
+        "nombre": "Etanol",
+        "densidad_g_ml": 0.789
+    },
+    "Metanol": {
+        "nombre": "Metanol",
+        "densidad_g_ml": 0.791
+    },
+    "Isopropanol": {
+        "nombre": "Isopropanol",
+        "densidad_g_ml": 0.786
+    },
+    "Acetona": {
+        "nombre": "Acetona",
+        "densidad_g_ml": 0.784
+    },
+    "Acetaldehído": {
+        "nombre": "Acetaldehído",
+        "densidad_g_ml": 0.788
+    },
+    "Tolueno": {
+        "nombre": "Tolueno",
+        "densidad_g_ml": 0.867
+    }
+}
+
+
+# ==============================================================================
+# PESTAÑA 1: PREPARACIÓN DE REACTIVOS
+# ==============================================================================
+
+def tab_cgms_preparacion():
+    st.markdown("<h2 style='text-align:center;'>🧪 Preparación de Reactivos</h2>", unsafe_allow_html=True)
+
+    opciones_menu = [
+        "Estándar Interno (1-Propanol) — Solución E.I. M1 (1000 mL)",
+        "Estándar Interno (1-Propanol) — Solución E.I. M2 (50 mL)",
+        "Control Bajo (CB) — Etanol 50 mg/dL (100 mL)",
+        "Control Medio (CM) — Etanol 100 mg/dL (100 mL)",
+        "Control Alto (CA) — Etanol 400 mg/dL (100 mL)"
+    ]
+
+    col_sel, col_pur = st.columns([2, 1])
+    with col_sel:
+        seleccion = st.selectbox("Seleccione el reactivo a preparar:", opciones_menu, index=0)
+    with col_pur:
+        pureza_usuario = st.number_input(
+            "Pureza del reactivo (%):",
+            min_value=1.0,
+            max_value=100.0,
+            value=100.0,
+            step=0.1,
+            format="%.2f",
+            key="tab1_pureza"
+        )
+
+    # Sección para poner cantidad de Estándar Interno y Muestra o Control (relación en vial)
+    st.markdown("<hr style='border-color:#D1D5DB;'>", unsafe_allow_html=True)
+    st.markdown("<h4 style='margin-top:0; margin-bottom:10px;'>⚖️ Relación de Volúmenes en Vial (Estándar Interno y Muestra o Control)</h4>", unsafe_allow_html=True)
+    c_v1, c_v2, c_v3 = st.columns(3)
+    with c_v1:
+        vol_muestra_ul = st.number_input(
+            "Cantidad de Muestra o Control (µL):",
+            min_value=1.0,
+            max_value=5000.0,
+            value=200.0,
+            step=10.0,
+            format="%.0f",
+            key="tab1_v_muestra"
+        )
+    with c_v2:
+        vol_ei_ul = st.number_input(
+            "Cantidad de Estándar Interno (µL):",
+            min_value=1.0,
+            max_value=5000.0,
+            value=1800.0,
+            step=50.0,
+            format="%.0f",
+            key="tab1_v_ei"
+        )
+    relacion_ei_muestra = vol_ei_ul / vol_muestra_ul
+    rel_str_tab1 = f"{relacion_ei_muestra:.0f}:1" if abs(relacion_ei_muestra - round(relacion_ei_muestra)) < 0.05 else f"{relacion_ei_muestra:.1f}:1"
+    with c_v3:
+        render_html(f"""
+        <div style="background:#E5E7EB; padding:10px; border-radius:6px; border:1px solid #CBD5E1; margin-top:4px;">
+            <b>Relación (E.I. / Muestra):</b> <span class="numeric-val">{rel_str_tab1}</span><br>
+            <span style="font-size:0.82rem; color:#334155;">Ajusta la concentración final esperada en matriz del Estándar Interno.</span>
+        </div>
+        """)
+
+    # Determinar parámetros según selección, pureza y relación para el Estándar Interno
+    if "E.I. M1" in seleccion:
+        reactivo_nombre = "1-Propanol"
+        densidad = 0.804
+        conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
+        vol_base_100 = (100.0 / 9.0) * 1000.0 * 1000.0 / 80400.0  # 138.20 µL exactos
+        vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
+        vol_str = f"{vol_ajustado:.1f} µL"
+
+        # Concentración esperada en la matriz (con 1800 µL / 200 µL = 9 -> 11.1111 * 9 = 100.00 mg/dL)
+        conc_solucion_ei = 100.0 / 9.0
+        conc_final_matriz = conc_solucion_ei * relacion_ei_muestra
+
+        reactivos_tabla = [
+            {"Reactivo / Material": "1-Propanol", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
+            {"Reactivo / Material": "Agua Destilada", "Cantidad": "C.b.p. 1000 mL", "Concentración": "—"},
+            {"Reactivo / Material": "Matraz Aforado (E.I. M1)", "Cantidad": "1000 mL", "Concentración": f"{conc_final_matriz:.2f} mg/dL (en matriz)"}
+        ]
+        pasos = [
+            {
+                "title": "Pre-llenado",
+                "desc": "En un matraz aforado de 1000 mL (previamente rotulado), llenar con agua destilada a la mitad aproximadamente de su capacidad.",
+                "conc": "Matraz: 1000 mL"
+            },
+            {
+                "title": "Adición de 1-Propanol",
+                "desc": f"Agregar {vol_str} de 1-propanol (al {pureza_usuario:.2f}% de pureza).",
+                "conc": f"Alícuota: {vol_str}"
+            },
+            {
+                "title": "Aforo y Conservación",
+                "desc": f"Aforar a 1000 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C ({vol_ei_ul:.0f} µL E.I. + {vol_muestra_ul:.0f} µL muestra).",
+                "conc": f"{conc_final_matriz:.2f} mg/dL"
+            }
+        ]
+
+    elif "E.I. M2" in seleccion:
+        reactivo_nombre = "1-Propanol"
+        densidad = 0.804
+        conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
+        vol_base_100 = (5000.0 / 9.0) * 100.0 * 1000.0 / 80400.0  # 690.99 -> 691.0 µL exactos
+        vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
+        vol_str = f"{vol_ajustado:.1f} µL"
+
+        conc_madre = 555.56
+        conc_solucion_ei = 100.0 / 9.0
+        conc_final_matriz = conc_solucion_ei * relacion_ei_muestra
+
+        reactivos_tabla = [
+            {"Reactivo / Material": "1-Propanol (para Matraz 1)", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
+            {"Reactivo / Material": "Matraz Aforado 1 (Solución Madre)", "Cantidad": "100 mL", "Concentración": f"{conc_madre:.2f} mg/dL"},
+            {"Reactivo / Material": "Solución Madre de E.I. (para Matraz 2)", "Cantidad": "1000 µL", "Concentración": f"{conc_madre:.2f} mg/dL"},
+            {"Reactivo / Material": "Matraz Aforado 2 (Solución E.I. M2)", "Cantidad": "50 mL", "Concentración": f"{conc_final_matriz:.2f} mg/dL (en matriz)"}
+        ]
+        pasos = [
+            {
+                "title": "Matraz 1: Solución Madre",
+                "desc": f"En un matraz aforado de 100 mL con agua destilada a la mitad, agregar {vol_str} de 1-propanol (al {pureza_usuario:.2f}% de pureza).",
+                "conc": f"Alícuota: {vol_str}"
+            },
+            {
+                "title": "Aforo Matraz 1",
+                "desc": "Aforar el matraz de 100 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C.",
+                "conc": f"{conc_madre:.2f} mg/dL"
+            },
+            {
+                "title": "Matraz 2: Dilución E.I. M2",
+                "desc": "En un matraz aforado de 50 mL con agua destilada a la mitad, agregar 1000 µL de la solución madre de estándar interno.",
+                "conc": "Alícuota: 1000 µL"
+            },
+            {
+                "title": "Aforo Matraz 2",
+                "desc": f"Aforar el matraz de 50 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C ({vol_ei_ul:.0f} µL E.I. + {vol_muestra_ul:.0f} µL muestra).",
+                "conc": f"{conc_final_matriz:.2f} mg/dL"
+            }
+        ]
+
+    elif "Control Bajo" in seleccion:
+        reactivo_nombre = "Etanol"
+        densidad = 0.789
+        conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
+        vol_base_100 = (50.0 * 100.0 * 1000.0) / 78900.0  # 63.37 -> 63.4 µL exactos
+        vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
+        vol_str = f"{vol_ajustado:.1f} µL"
+
+        reactivos_tabla = [
+            {"Reactivo / Material": "Etanol", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
+            {"Reactivo / Material": "Agua Destilada", "Cantidad": "C.b.p. 100 mL", "Concentración": "—"},
+            {"Reactivo / Material": "Matraz Aforado (Control Bajo)", "Cantidad": "100 mL", "Concentración": "50.00 mg/dL"}
+        ]
+        pasos = [
+            {
+                "title": "Pre-llenado",
+                "desc": "En un matraz aforado de 100 mL (rotulado como Control Bajo - CB), llenar con agua destilada a la mitad de su capacidad.",
+                "conc": "Matraz: 100 mL"
+            },
+            {
+                "title": "Adición de Etanol",
+                "desc": f"Agregar {vol_str} de etanol (al {pureza_usuario:.2f}% de pureza).",
+                "conc": f"Alícuota: {vol_str}"
+            },
+            {
+                "title": "Aforo y Conservación",
+                "desc": "Aforar a 100 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
+                "conc": "50.00 mg/dL"
+            }
+        ]
+
+    elif "Control Medio" in seleccion:
+        reactivo_nombre = "Etanol"
+        densidad = 0.789
+        conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
+        vol_base_100 = (100.0 * 100.0 * 1000.0) / 78900.0  # 126.74 -> 126.7 µL exactos
+        vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
+        vol_str = f"{vol_ajustado:.1f} µL"
+
+        reactivos_tabla = [
+            {"Reactivo / Material": "Etanol", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
+            {"Reactivo / Material": "Agua Destilada", "Cantidad": "C.b.p. 100 mL", "Concentración": "—"},
+            {"Reactivo / Material": "Matraz Aforado (Control Medio)", "Cantidad": "100 mL", "Concentración": "100.00 mg/dL"}
+        ]
+        pasos = [
+            {
+                "title": "Pre-llenado",
+                "desc": "En un matraz aforado de 100 mL (rotulado como Control Medio - CM), llenar con agua destilada a la mitad de su capacidad.",
+                "conc": "Matraz: 100 mL"
+            },
+            {
+                "title": "Adición de Etanol",
+                "desc": f"Agregar {vol_str} de etanol (al {pureza_usuario:.2f}% de pureza).",
+                "conc": f"Alícuota: {vol_str}"
+            },
+            {
+                "title": "Aforo y Conservación",
+                "desc": "Aforar a 100 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
+                "conc": "100.00 mg/dL"
+            }
+        ]
+
+    else:  # Control Alto
+        reactivo_nombre = "Etanol"
+        densidad = 0.789
+        conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
+        vol_base_100 = (400.0 * 100.0 * 1000.0) / 78900.0  # 506.97 -> 507.0 µL exactos
+        vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
+        vol_str = f"{vol_ajustado:.1f} µL"
+
+        reactivos_tabla = [
+            {"Reactivo / Material": "Etanol", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
+            {"Reactivo / Material": "Agua Destilada", "Cantidad": "C.b.p. 100 mL", "Concentración": "—"},
+            {"Reactivo / Material": "Matraz Aforado (Control Alto)", "Cantidad": "100 mL", "Concentración": "400.00 mg/dL"}
+        ]
+        pasos = [
+            {
+                "title": "Pre-llenado",
+                "desc": "En un matraz aforado de 100 mL (rotulado como Control Alto - CA), llenar con agua destilada a la mitad de su capacidad.",
+                "conc": "Matraz: 100 mL"
+            },
+            {
+                "title": "Adición de Etanol",
+                "desc": f"Agregar {vol_str} de etanol (al {pureza_usuario:.2f}% de pureza).",
+                "conc": f"Alícuota: {vol_str}"
+            },
+            {
+                "title": "Aforo y Conservación",
+                "desc": "Aforar a 100 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
+                "conc": "400.00 mg/dL"
+            }
+        ]
+
+    # Cuadro de Parámetros del Reactivo (Densidad, Pureza del usuario y Concentración inicial en mg/dL)
+    st.markdown("<hr style='border-color:#D1D5DB;'>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        render_html(f"""
+        <div class="forensic-card" style="border-left: 5px solid #C0392B;">
+            <h4 style="margin-top:0;">⚗️ Parámetros del Reactivo ({reactivo_nombre})</h4>
+            <p style="margin-bottom:6px;"><b>Densidad:</b> <span class="numeric-val">{densidad:.3f} g/mL</span></p>
+            <p style="margin-bottom:6px;"><b>Pureza:</b> <span class="numeric-val">{pureza_usuario:.2f} %</span></p>
+            <p style="margin-bottom:0;"><b>Concentración inicial:</b> <span class="numeric-val">{conc_inicial_mg_dl:,.2f} mg/dL</span></p>
+        </div>
+        """)
+
+    # Tabla de reactivos necesarios
+    st.markdown("<hr style='border-color:#D1D5DB;'><h3 style='text-align:center;'>Reactivos Necesarios</h3>", unsafe_allow_html=True)
+    st.table(reactivos_tabla)
+
+    # Procedimiento paso a paso
+    st.markdown("<hr style='border-color:#D1D5DB;'><h3 style='text-align:center;'>Procedimiento Analítico</h3>", unsafe_allow_html=True)
+    render_step_flow(pasos)
+
+    render_analytical_note_tox()
+
+
+# ==============================================================================
+# PESTAÑA 2: CALCULADORA DE ESTÁNDARES Y CONTROLES
+# ==============================================================================
+
+def apply_preset(preset_name):
+    if preset_name == "EI_M1":
+        st.session_state.calc_rol = "Estándar Interno (1-Propanol)"
+        st.session_state.calc_solvente = "1-Propanol"
+        st.session_state.calc_modo_inic = "Por Densidad (g/mL) y Pureza (%)"
+        st.session_state.calc_densidad = 0.804
+        st.session_state.calc_pureza = 100.0
+        st.session_state.calc_num_dil = "1 Dilución (1 Matraz)"
+        st.session_state.calc_conc_obj = 100.0
+        st.session_state.calc_v_final = 1000.0
+        st.session_state.calc_v_muestra = 200.0
+        st.session_state.calc_v_ei = 1800.0
+    elif preset_name == "EI_M2":
+        st.session_state.calc_rol = "Estándar Interno (1-Propanol)"
+        st.session_state.calc_solvente = "1-Propanol"
+        st.session_state.calc_modo_inic = "Por Densidad (g/mL) y Pureza (%)"
+        st.session_state.calc_densidad = 0.804
+        st.session_state.calc_pureza = 100.0
+        st.session_state.calc_num_dil = "2 Diluciones (2 Matraces: Solución Madre + Matraz Final)"
+        st.session_state.calc_conc_obj = 100.0
+        st.session_state.calc_v_madre = 100.0
+        st.session_state.calc_v_final = 50.0
+        st.session_state.calc_alicuota_madre_ul = 1000.0
+        st.session_state.calc_v_muestra = 200.0
+        st.session_state.calc_v_ei = 1800.0
+    elif preset_name == "CB":
+        st.session_state.calc_rol = "Control Bajo (CB)"
+        st.session_state.calc_solvente = "Etanol"
+        st.session_state.calc_modo_inic = "Por Densidad (g/mL) y Pureza (%)"
+        st.session_state.calc_densidad = 0.789
+        st.session_state.calc_pureza = 100.0
+        st.session_state.calc_num_dil = "1 Dilución (1 Matraz)"
+        st.session_state.calc_conc_obj = 50.0
+        st.session_state.calc_v_final = 100.0
+    elif preset_name == "CM":
+        st.session_state.calc_rol = "Control Medio (CM)"
+        st.session_state.calc_solvente = "Etanol"
+        st.session_state.calc_modo_inic = "Por Densidad (g/mL) y Pureza (%)"
+        st.session_state.calc_densidad = 0.789
+        st.session_state.calc_pureza = 100.0
+        st.session_state.calc_num_dil = "1 Dilución (1 Matraz)"
+        st.session_state.calc_conc_obj = 100.0
+        st.session_state.calc_v_final = 100.0
+    elif preset_name == "CA":
+        st.session_state.calc_rol = "Control Alto (CA)"
+        st.session_state.calc_solvente = "Etanol"
+        st.session_state.calc_modo_inic = "Por Densidad (g/mL) y Pureza (%)"
+        st.session_state.calc_densidad = 0.789
+        st.session_state.calc_pureza = 100.0
+        st.session_state.calc_num_dil = "1 Dilución (1 Matraz)"
+        st.session_state.calc_conc_obj = 400.0
+        st.session_state.calc_v_final = 100.0
+
+
+def init_calc_state():
+    defaults = {
+        "calc_rol": "Estándar Interno (1-Propanol)",
+        "calc_solvente": "1-Propanol",
+        "calc_modo_inic": "Por Densidad (g/mL) y Pureza (%)",
+        "calc_densidad": 0.804,
+        "calc_conc_inic_manual": 80400.0,
+        "calc_pureza": 100.0,
+        "calc_num_dil": "1 Dilución (1 Matraz)",
+        "calc_conc_obj": 100.0,
+        "calc_v_madre": 100.0,
+        "calc_v_final": 1000.0,
+        "calc_alicuota_madre_ul": 1000.0,
+        "calc_v_muestra": 200.0,
+        "calc_v_ei": 1800.0
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+
+def on_rol_change():
+    rol = st.session_state.calc_rol
+    if "Estándar Interno" in rol:
+        st.session_state.calc_solvente = "1-Propanol"
+        st.session_state.calc_densidad = 0.804
+        st.session_state.calc_conc_obj = 100.0
+    elif "Control Bajo" in rol:
+        st.session_state.calc_solvente = "Etanol"
+        st.session_state.calc_densidad = 0.789
+        st.session_state.calc_conc_obj = 50.0
+        st.session_state.calc_v_final = 100.0
+        st.session_state.calc_num_dil = "1 Dilución (1 Matraz)"
+    elif "Control Medio" in rol:
+        st.session_state.calc_solvente = "Etanol"
+        st.session_state.calc_densidad = 0.789
+        st.session_state.calc_conc_obj = 100.0
+        st.session_state.calc_v_final = 100.0
+        st.session_state.calc_num_dil = "1 Dilución (1 Matraz)"
+    elif "Control Alto" in rol:
+        st.session_state.calc_solvente = "Etanol"
+        st.session_state.calc_densidad = 0.789
+        st.session_state.calc_conc_obj = 400.0
+        st.session_state.calc_v_final = 100.0
+        st.session_state.calc_num_dil = "1 Dilución (1 Matraz)"
+
+
+def on_solvente_change():
+    solv = st.session_state.calc_solvente
+    if solv in SOLVENT_PROPERTIES:
+        st.session_state.calc_densidad = SOLVENT_PROPERTIES[solv]["densidad_g_ml"]
+        st.session_state.calc_conc_inic_manual = SOLVENT_PROPERTIES[solv]["densidad_g_ml"] * 100000.0
+
+
+def tab_cgms_calculadora():
+    init_calc_state()
+
+    st.markdown("<h2 style='text-align:center;'>🧮 Calculadora de Estándares y Controles</h2>", unsafe_allow_html=True)
+
+    b1, b2, b3, b4, b5 = st.columns(5)
+    with b1:
+        if st.button("📌 E.I. M1 (1000 mL)", use_container_width=True):
+            apply_preset("EI_M1")
+            st.rerun()
+    with b2:
+        if st.button("📌 E.I. M2 (50 mL)", use_container_width=True):
+            apply_preset("EI_M2")
+            st.rerun()
+    with b3:
+        if st.button("🟢 Control Bajo (50 mg/dL)", use_container_width=True):
+            apply_preset("CB")
+            st.rerun()
+    with b4:
+        if st.button("🟡 Control Medio (100 mg/dL)", use_container_width=True):
+            apply_preset("CM")
+            st.rerun()
+    with b5:
+        if st.button("🔴 Control Alto (400 mg/dL)", use_container_width=True):
+            apply_preset("CA")
+            st.rerun()
+
+    st.markdown("<hr style='border-color:#D1D5DB;'>", unsafe_allow_html=True)
+
+    col_cfg1, col_cfg2 = st.columns(2)
+
+    with col_cfg1:
+        st.markdown("<div class='forensic-card' style='border-left: 4px solid #003366; padding:12px;'><h4 style='color:#003366 !important; margin:0;'>🧪 1. Parámetros del Reactivo Inicial</h4></div>", unsafe_allow_html=True)
+
+        rol_actual = st.selectbox(
+            "Estándar o Control:",
+            [
+                "Estándar Interno (1-Propanol)",
+                "Control Bajo (CB)",
+                "Control Medio (CM)",
+                "Control Alto (CA)",
+                "Personalizado"
+            ],
+            key="calc_rol",
+            on_change=on_rol_change
+        )
+
+        solv_sel = st.selectbox(
+            "Reactivo:",
+            list(SOLVENT_PROPERTIES.keys()),
+            key="calc_solvente",
+            on_change=on_solvente_change
+        )
+
+        modo_inic = st.radio(
+            "Definir concentración inicial por:",
+            [
+                "Por Densidad (g/mL) y Pureza (%)",
+                "Por Concentración Inicial (mg/dL) y Pureza (%)"
+            ],
+            key="calc_modo_inic"
+        )
+
+        c_in1, c_in2 = st.columns(2)
+        with c_in1:
+            if modo_inic.startswith("Por Densidad"):
+                densidad_val = st.number_input(
+                    "Densidad (g/mL):",
+                    min_value=0.100,
+                    max_value=3.000,
+                    step=0.001,
+                    format="%.3f",
+                    key="calc_densidad"
+                )
+                conc_base_100_mg_dl = densidad_val * 100000.0
+            else:
+                conc_base_100_mg_dl = st.number_input(
+                    "Concentración base al 100% (mg/dL):",
+                    min_value=1.0,
+                    max_value=300000.0,
+                    step=100.0,
+                    format="%.2f",
+                    key="calc_conc_inic_manual"
+                )
+                densidad_val = conc_base_100_mg_dl / 100000.0
+
+        with c_in2:
+            pureza_val = st.number_input(
+                "Pureza (%):",
+                min_value=1.0,
+                max_value=100.0,
+                step=0.1,
+                format="%.2f",
+                key="calc_pureza"
+            )
+
+        conc_inic_efectiva_mg_dl = conc_base_100_mg_dl * (pureza_val / 100.0)
+
+        st.markdown(
+            f"<div style='background:#E5E7EB; padding:10px; border-radius:6px; border:1px solid #CBD5E1; margin-top:8px;'>"
+            f"<b>Densidad:</b> <span class='numeric-val'>{densidad_val:.3f} g/mL</span> &nbsp;|&nbsp; "
+            f"<b>Pureza:</b> <span class='numeric-val'>{pureza_val:.2f} %</span><br>"
+            f"<b>Concentración inicial:</b> <span class='numeric-val' style='color:#C0392B;'>{conc_inic_efectiva_mg_dl:,.2f} mg/dL</span>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+    with col_cfg2:
+        st.markdown("<div class='forensic-card' style='border-left: 4px solid #C0392B; padding:12px;'><h4 style='color:#C0392B !important; margin:0;'>⚗️ 2. Diluciones, Relación en Vial y Matraz Aforado</h4></div>", unsafe_allow_html=True)
+
+        es_ei = "Estándar Interno" in rol_actual
+
+        # Sección para poner cantidad de Estándar Interno y Muestra o Control
+        c_rel1, c_rel2 = st.columns(2)
+        with c_rel1:
+            v_muestra_ul = st.number_input(
+                "Cantidad de Muestra o Control (µL):",
+                min_value=1.0,
+                max_value=5000.0,
+                step=10.0,
+                format="%.0f",
+                key="calc_v_muestra"
+            )
+        with c_rel2:
+            v_ei_ul = st.number_input(
+                "Cantidad de Estándar Interno (µL):",
+                min_value=1.0,
+                max_value=5000.0,
+                step=50.0,
+                format="%.0f",
+                key="calc_v_ei"
+            )
+
+        relacion_vial = v_ei_ul / v_muestra_ul
+        rel_str_tab2 = f"{relacion_vial:.0f}:1" if abs(relacion_vial - round(relacion_vial)) < 0.05 else f"{relacion_vial:.1f}:1"
+
+        if es_ei:
+            conc_esperada_matriz_mg_dl = st.number_input(
+                "Concentración esperada en la matriz (mg/dL):",
+                min_value=0.01,
+                max_value=50000.0,
+                step=5.0,
+                format="%.2f",
+                key="calc_conc_obj"
+            )
+            # Para el Estándar Interno, la concentración de preparación en solución se ajusta por la relación E.I./Muestra
+            conc_solucion_trabajo_mg_dl = conc_esperada_matriz_mg_dl / relacion_vial
+            conc_final_mostrada_mg_dl = conc_esperada_matriz_mg_dl
+            etiqueta_conc_final = f"{conc_final_mostrada_mg_dl:.2f} mg/dL (en matriz, relación {rel_str_tab2})"
+        else:
+            conc_esperada_matriz_mg_dl = st.number_input(
+                "Concentración deseada del Control (mg/dL):",
+                min_value=0.01,
+                max_value=50000.0,
+                step=5.0,
+                format="%.2f",
+                key="calc_conc_obj"
+            )
+            conc_solucion_trabajo_mg_dl = conc_esperada_matriz_mg_dl
+            conc_final_mostrada_mg_dl = conc_esperada_matriz_mg_dl
+            etiqueta_conc_final = f"{conc_final_mostrada_mg_dl:.2f} mg/dL"
+
+        num_dil_str = st.selectbox(
+            "Cantidad de Diluciones:",
+            [
+                "1 Dilución (1 Matraz)",
+                "2 Diluciones (2 Matraces: Solución Madre + Matraz Final)"
+            ],
+            key="calc_num_dil"
+        )
+        num_diluciones = 1 if num_dil_str.startswith("1") else 2
+
+        if num_diluciones == 1:
+            v_final_ml = st.number_input(
+                "Volumen del Matraz Aforado (mL):",
+                min_value=1.0,
+                max_value=5000.0,
+                step=10.0,
+                format="%.0f",
+                key="calc_v_final"
+            )
+            v_madre_ml = None
+        else:
+            c_m1, c_m2 = st.columns(2)
+            with c_m1:
+                v_madre_ml = st.number_input(
+                    "Volumen Matraz 1 — Solución Madre (mL):",
+                    min_value=1.0,
+                    max_value=5000.0,
+                    step=10.0,
+                    format="%.0f",
+                    key="calc_v_madre"
+                )
+            with c_m2:
+                v_final_ml = st.number_input(
+                    "Volumen Matraz 2 — Matraz Final (mL):",
+                    min_value=1.0,
+                    max_value=5000.0,
+                    step=10.0,
+                    format="%.0f",
+                    key="calc_v_final"
+                )
+
+            alicuota_madre_ul = st.number_input(
+                "Alícuota de Solución Madre (Matraz 1) a transferir al Matraz 2 (µL):",
+                min_value=1.0,
+                max_value=float(v_final_ml * 1000.0),
+                step=50.0,
+                format="%.0f",
+                key="calc_alicuota_madre_ul"
+            )
+
+    # ==========================================================================
+    # RESULTADOS DE LA CALCULADORA POR PASO
+    # ==========================================================================
+    st.markdown("<hr style='border-color:#D1D5DB;'><h3 style='text-align:center;'>📊 Concentración y Volúmenes por Matraz</h3>", unsafe_allow_html=True)
+
+    if num_diluciones == 1:
+        vol_puro_corregido_ul = (conc_solucion_trabajo_mg_dl * v_final_ml * 1000.0) / conc_inic_efectiva_mg_dl
+
+        c_l, c_m, c_r = st.columns([1, 2, 1])
+        with c_m:
+            render_html(f"""
+            <div class="forensic-card" style="border-top: 5px solid #003366;">
+                <span class="badge-navy">PASO 1 DE 1 — MATRAZ ÚNICO</span>
+                <h3 style="margin:8px 0;">Matraz Aforado de {v_final_ml:.0f} mL</h3>
+                <p style="margin-bottom:6px;"><b>Concentración inicial de {SOLVENT_PROPERTIES[solv_sel]['nombre']}:</b> <span class="numeric-val">{conc_inic_efectiva_mg_dl:,.2f} mg/dL</span></p>
+                <p style="margin-bottom:6px;"><b>Alícuota de {SOLVENT_PROPERTIES[solv_sel]['nombre']} a agregar:</b> <span class="numeric-val" style="font-size:1.15rem; color:#C0392B;">{vol_puro_corregido_ul:.1f} µL</span></p>
+                <p style="margin-bottom:6px;"><b>Volumen de aforo del matraz:</b> <span class="numeric-val">{v_final_ml:.0f} mL</span></p>
+                <hr style="border-color:#D1D5DB; margin:10px 0;">
+                <p style="margin-bottom:0; font-size:1.05rem;"><b>Concentración Final ({v_final_ml:.0f} mL):</b><br>
+                    <span class="numeric-val" style="font-size:1.25rem; color:#003366;">{etiqueta_conc_final}</span>
+                </p>
+            </div>
+            """)
+
+        pasos_calc = [
+            {
+                "title": f"Matraz Aforado ({v_final_ml:.0f} mL)",
+                "desc": f"En un matraz aforado de {v_final_ml:.0f} mL, llenar con agua destilada a la mitad de su capacidad.",
+                "conc": f"Matraz: {v_final_ml:.0f} mL"
+            },
+            {
+                "title": f"Adición de {SOLVENT_PROPERTIES[solv_sel]['nombre']}",
+                "desc": f"Agregar {vol_puro_corregido_ul:.1f} µL de {SOLVENT_PROPERTIES[solv_sel]['nombre']} (al {pureza_val:.2f}% de pureza).",
+                "conc": f"Alícuota: {vol_puro_corregido_ul:.1f} µL"
+            },
+            {
+                "title": "Aforo Final",
+                "desc": f"Aforar a {v_final_ml:.0f} mL con agua destilada, tapar con Parafilm y conservar de 4 °C a 8 °C.",
+                "conc": f"{conc_final_mostrada_mg_dl:.2f} mg/dL"
+            }
+        ]
+        render_step_flow(pasos_calc)
+
+    else:
+        factor_dil_2 = (v_final_ml * 1000.0) / alicuota_madre_ul
+        conc_madre_mg_dl = conc_solucion_trabajo_mg_dl * factor_dil_2
+        vol_puro_corregido_ul = (conc_madre_mg_dl * v_madre_ml * 1000.0) / conc_inic_efectiva_mg_dl
+
+        col_m1, col_m2 = st.columns(2)
+
+        with col_m1:
+            render_html(f"""
+            <div class="forensic-card" style="border-top: 5px solid #003366;">
+                <span class="badge-navy">PASO 1 DE 2 — MATRAZ 1 (SOLUCIÓN MADRE)</span>
+                <h4 style="margin:8px 0;">Matraz Aforado de {v_madre_ml:.0f} mL</h4>
+                <p style="margin-bottom:6px;"><b>Concentración inicial de {SOLVENT_PROPERTIES[solv_sel]['nombre']}:</b> <span class="numeric-val">{conc_inic_efectiva_mg_dl:,.2f} mg/dL</span></p>
+                <p style="margin-bottom:6px;"><b>Alícuota de {SOLVENT_PROPERTIES[solv_sel]['nombre']} a agregar:</b> <span class="numeric-val" style="font-size:1.15rem; color:#C0392B;">{vol_puro_corregido_ul:.1f} µL</span></p>
+                <p style="margin-bottom:6px;"><b>Volumen de aforo del Matraz 1:</b> <span class="numeric-val">{v_madre_ml:.0f} mL</span></p>
+                <hr style="border-color:#D1D5DB; margin:10px 0;">
+                <p style="margin-bottom:0; font-size:1.05rem;"><b>Concentración del Matraz 1 ({v_madre_ml:.0f} mL):</b><br>
+                    <span class="numeric-val" style="font-size:1.25rem; color:#003366;">{conc_madre_mg_dl:.2f} mg/dL</span>
+                </p>
+            </div>
+            """)
+
+        with col_m2:
+            render_html(f"""
+            <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+                <span class="badge-teal">PASO 2 DE 2 — MATRAZ 2 (MATRAZ FINAL)</span>
+                <h4 style="margin:8px 0;">Matraz Aforado de {v_final_ml:.0f} mL</h4>
+                <p style="margin-bottom:6px;"><b>Concentración de Solución Madre (Matraz 1):</b> <span class="numeric-val">{conc_madre_mg_dl:.2f} mg/dL</span></p>
+                <p style="margin-bottom:6px;"><b>Alícuota de Solución Madre a transferir:</b> <span class="numeric-val" style="font-size:1.15rem; color:#0F766E;">{alicuota_madre_ul:.0f} µL</span></p>
+                <p style="margin-bottom:6px;"><b>Volumen de aforo del Matraz 2:</b> <span class="numeric-val">{v_final_ml:.0f} mL</span></p>
+                <hr style="border-color:#D1D5DB; margin:10px 0;">
+                <p style="margin-bottom:0; font-size:1.05rem;"><b>Concentración Final del Matraz 2 ({v_final_ml:.0f} mL):</b><br>
+                    <span class="numeric-val" style="font-size:1.25rem; color:#003366;">{etiqueta_conc_final}</span>
+                </p>
+            </div>
+            """)
+
+        pasos_calc_2 = [
+            {
+                "title": f"Matraz 1 ({v_madre_ml:.0f} mL): Solución Madre",
+                "desc": f"En un matraz aforado de {v_madre_ml:.0f} mL con agua destilada a la mitad, agregar {vol_puro_corregido_ul:.1f} µL de {SOLVENT_PROPERTIES[solv_sel]['nombre']}.",
+                "conc": f"Alícuota: {vol_puro_corregido_ul:.1f} µL"
+            },
+            {
+                "title": f"Aforo Matraz 1 ({v_madre_ml:.0f} mL)",
+                "desc": f"Aforar el Matraz 1 a {v_madre_ml:.0f} mL con agua destilada, tapar con Parafilm y homogenizar.",
+                "conc": f"{conc_madre_mg_dl:.2f} mg/dL"
+            },
+            {
+                "title": f"Matraz 2 ({v_final_ml:.0f} mL): Dilución",
+                "desc": f"En un matraz aforado de {v_final_ml:.0f} mL con agua destilada a la mitad, agregar {alicuota_madre_ul:.0f} µL de la Solución Madre (Matraz 1).",
+                "conc": f"Alícuota: {alicuota_madre_ul:.0f} µL"
+            },
+            {
+                "title": f"Aforo Matraz 2 ({v_final_ml:.0f} mL)",
+                "desc": f"Aforar el Matraz 2 a {v_final_ml:.0f} mL con agua destilada, tapar con Parafilm y conservar de 4 °C a 8 °C.",
+                "conc": f"{conc_final_mostrada_mg_dl:.2f} mg/dL"
+            }
+        ]
+        render_step_flow(pasos_calc_2)
+
+    render_analytical_note_tox()
+
+
+# ==============================================================================
+# PESTAÑA 3: ANÁLISIS TOXICOLÓGICOS Y VENENOS (CONWAY, CARBOXI, AGLUTINACIÓN, VIH, CN, As, P)
+# ==============================================================================
+
+ANALISIS_TOXICOLOGICOS_DB = {
+    "1. Microdifusión en Cámara de Conway (Alcoholes)": {
+        "titulo": "Microdifusión en Cámara de Conway — Prueba de Dicromato de Potasio (Alcoholes)",
+        "fundamento": (
+            "Se basa en una reacción de <b>óxido-reducción (REDOX)</b> acoplada a una separación física por <b>microdifusión pasiva en cámara cerrada (Cámara de Conway)</b>. "
+            "En la unidad sellada e incubada, los alcoholes volátiles de la muestra biológica (sangre u orina en el compartimento exterior) se evaporan y difunden por la fase gaseosa hacia el compartimento central, donde reaccionan con una <b>solución de dicromato de potasio (K<sub>2</sub>Cr<sub>2</sub>O<sub>7</sub>) en ácido sulfúrico (H<sub>2</sub>SO<sub>4</sub>) al 50% v/v</b>. "
+            "El etanol (CH<sub>3</sub>CH<sub>2</sub>OH) se oxida a acetaldehído y finalmente a ácido acético (CH<sub>3</sub>COOH), mientras que el ion dicromato hexavalente (<b>Cr<sub>2</sub>O<sub>7</sub><sup>2-</sup>, Cr<sup>6+</sup> de color naranja brillante</b>) se reduce a ion crómico trivalente (<b>Cr<sup>3+</sup>, de color verde esmeralda / verde-azulado</b>)."
+        ),
+        "reaccion_general": "2 K₂Cr₂O₇ (Naranja, Cr⁶⁺) + 8 H₂SO₄ + 3 CH₃CH₂OH  ⟶  2 Cr₂(SO₄)₃ (Verde, Cr³⁺) + 3 CH₃COOH + 2 K₂SO₄ + 11 H₂O",
+        "reactivos": [
+            {
+                "Reactivo": "Dicromato de Potasio (K₂Cr₂O₇) en H₂SO₄ al 50% v/v (Reactivo Oxidante)",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL (frasco ámbar)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Medir con micropipeta 5.0 mL (5000 µL) de agua destilada y, en baño de hielo, añadir lentamente 5.0 mL (5000 µL) de H₂SO₄ concentrado (50% v/v). Pesar en balanza analítica 0.1225 g (122.5 mg para 0.25 N en Conway) o hasta saturación (~0.350 g) de K₂Cr₂O₇ y disolver hasta completar 10 mL."
+            },
+            {
+                "Reactivo": "Carbonato de Sodio (Na₂CO₃) al 20% p/v (Agente liberador)",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 2.000 g de Na₂CO₃ anhidro en balanza analítica y disolver en agua destilada hasta aforar a 10 mL."
+            },
+            {
+                "Reactivo": "Estándar Control Positivo de Etanol (100 mg/dL)",
+                "Estabilidad / Escala": "Almacenable en refrigeración — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Medir con micropipeta 12.7 µL de etanol absoluto (ρ = 0.789 g/mL) y aforar a 10 mL con agua destilada."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Sellado y Disposición",
+                "desc": "Engrasar el borde de la Cámara de Conway con vaselina. Colocar 1000 µL del reactivo de K₂Cr₂O₇ en H₂SO₄ al 50% v/v (naranja) en la celdilla central.",
+                "conc": "Centro: 1000 µL Reactivo"
+            },
+            {
+                "title": "Carga de Muestra",
+                "desc": "En el compartimento exterior colocar 1000 µL de sangre u orina y 500 µL de Na₂CO₃ al 20% en el extremo opuesto del anillo exterior (o en tubo para líquidos: 50–100 µL de muestra + 1000 µL de agua + 1000 µL de reactivo).",
+                "conc": "Exterior: 1000 µL Muestra"
+            },
+            {
+                "title": "Difusión Térmica",
+                "desc": "Cerrar herméticamente la cámara, mezclar suavemente el anillo exterior por rotación e incubar de 30 a 45 minutos a 37 °C (o 1–2 h a temperatura ambiente).",
+                "conc": "Incubación: 37 °C"
+            },
+            {
+                "title": "Lectura Cromática",
+                "desc": "Observar el viraje de color en la celdilla central de naranja brillante (Cr⁶⁺) a verde o verde-azulado (Cr³⁺).",
+                "conc": "Naranja ⟶ Verde"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO</span>
+            <h4 style="margin:8px 0;">Viraje a Verde Esmeralda / Verde-Azulado (Cr³⁺)</h4>
+            <div style="display:flex; justify-content:center; align-items:center; margin:12px 0;">
+                <div style="width:120px; height:120px; border-radius:50%; background:#D97706; border:4px solid #6B7280; display:flex; align-items:center; justify-content:center; box-shadow: inset 0 0 12px rgba(0,0,0,0.25);">
+                    <div style="width:62px; height:62px; border-radius:50%; background:linear-gradient(135deg, #059669, #0F766E); border:3px solid #E5E7EB; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-size:0.7rem; font-weight:bold;">
+                        Centro<br>VERDE
+                    </div>
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Celdilla Central:</b> Cambia homogéneamente de naranja brillante a <b>verde esmeralda o verde-azulado</b> por reducción a Cr<sup>3+</sup>.<br>
+                <b>Anillo Exterior:</b> Muestra biológica oscura/rojiza aislada físicamente.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO</span>
+            <h4 style="margin:8px 0;">Permanencia del Naranja Brillante (Cr⁶⁺)</h4>
+            <div style="display:flex; justify-content:center; align-items:center; margin:12px 0;">
+                <div style="width:120px; height:120px; border-radius:50%; background:#991B1B; border:4px solid #6B7280; display:flex; align-items:center; justify-content:center; box-shadow: inset 0 0 12px rgba(0,0,0,0.25);">
+                    <div style="width:62px; height:62px; border-radius:50%; background:linear-gradient(135deg, #F59E0B, #EA580C); border:3px solid #E5E7EB; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-size:0.7rem; font-weight:bold;">
+                        Centro<br>NARANJA
+                    </div>
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Celdilla Central:</b> Conserva su color <b>naranja brillante</b> original sin cambio cromático.<br>
+                <b>Interpretación:</b> Ausencia de alcoholes o reductores volátiles en la muestra.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "No es específica para etanol: producen igualmente coloración verde el acetaldehído, metanol, 1-propanol (n-propanol) y 2-propanol (isopropanol), así como formaldehído y acetona (cetoacidosis diabética). En prueba directa sin cámara de microdifusión, los aminofenoles y polifenoles orto/para dan color verde a pardo."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "Fuga del vapor de alcohol por sellado deficiente de la tapa de la Cámara de Conway; muestras almacenadas en tubos destapados donde el analito volátil se evaporó antes del análisis."},
+            {"Tipo": "Interferencia Crítica", "Causa / Sustancia Interferente": "Uso de torundas con alcohol etílico o isopropílico durante la venopunción, o salpicadura accidental de la muestra biológica hacia la celdilla central."}
+        ]
+    },
+
+    "2. Carboxihemoglobina — Prueba de Hoppe-Seyler (COHb)": {
+        "titulo": "Determinación de Carboxihemoglobina (COHb) — Prueba Alcalina de Hoppe-Seyler",
+        "fundamento": (
+            "Se fundamenta en la <b>estabilidad diferencial de los complejos de la hemoglobina frente a la desnaturalización alcalina fuerte (NaOH al 15%)</b>. "
+            "La <b>oxihemoglobina normal (O<sub>2</sub>Hb)</b> es inestable en medio fuertemente básico: al añadir NaOH, la proteína globina se desnaturaliza rápidamente y el hierro hemo (Fe<sup>2+</sup>) se oxida a Fe<sup>3+</sup> formando <b>hematina alcalina</b>, de color <b>marrón verdoso o café sucio</b>. "
+            "Por el contrario, la <b>carboxihemoglobina (COHb)</b> presenta un enlace de coordinación Fe<sup>2+</sup>—CO sumamente estable que protege la estructura tridimensional de la globina y retarda su desnaturalización, manteniendo su coloración <b>rojo cereza o rosa brillante</b> durante al menos 60 segundos."
+        ),
+        "reaccion_general": "O₂Hb (Rojo) + NaOH (15%) ⟶ Hematina Alcalina (Café/Marrón inmediato)   |   COHb (Rojo cereza) + NaOH (15%) ⟶ Permanece Rojo Cereza (> 60 s)",
+        "reactivos": [
+            {
+                "Reactivo": "Hidróxido de Sodio (NaOH) al 15% p/v",
+                "Estabilidad / Escala": "Almacenable en frasco plástico — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 1.500 g de lentejas de NaOH en balanza analítica. Disolver poco a poco en 6.0 mL (6000 µL) de agua destilada (reacción exotérmica) y, una vez frío, aforar a 10 mL con agua destilada."
+            },
+            {
+                "Reactivo": "Agua Destilada (Medio de hemólisis)",
+                "Estabilidad / Escala": "Almacenable — 10 mL (5 mL por tubo)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Medir 5.0 mL (5000 µL) para el tubo problema y 5.0 mL (5000 µL) para el tubo testigo negativo."
+            },
+            {
+                "Reactivo": "Sangre Testigo Negativo",
+                "Estabilidad / Escala": "Muestra de referencia fresca",
+                "Preparación (Balanza Analítica y Micropipeta)": "100 µL (2 gotas) de sangre normal oxigenada libre de carboxihemoglobina para comparación simultánea."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Dilución Hemolítica",
+                "desc": "Colocar 5.0 mL (5000 µL) de agua destilada en dos tubos de ensayo: Tubo 1 (Muestra problema) y Tubo 2 (Testigo negativo).",
+                "conc": "5.0 mL H₂O / tubo"
+            },
+            {
+                "title": "Adición de Sangre",
+                "desc": "Añadir 100 µL (2 gotas) de sangre problema al Tubo 1 y 100 µL (2 gotas) de sangre testigo al Tubo 2. Mezclar hasta obtener un tono rosáceo tenue.",
+                "conc": "Alícuota: 100 µL"
+            },
+            {
+                "title": "Desnaturalización Alcalina",
+                "desc": "Añadir de 150 a 250 µL (3 a 5 gotas) de NaOH al 15% a cada tubo y agitar suavemente.",
+                "conc": "NaOH 15%: 150–250 µL"
+            },
+            {
+                "title": "Observación Comparativa",
+                "desc": "Comparar inmediatamente y a los 60 segundos el color de la muestra frente al tubo testigo sobre un fondo blanco.",
+                "conc": "Lectura: 0 a 60 s"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO (COHb ≥ 20–25%)</span>
+            <h4 style="margin:8px 0;">Persistencia del Color Rojo Cereza / Rosa Brillante</h4>
+            <div style="height:65px; width:100%; border-radius:8px; background:linear-gradient(90deg, #E11D48, #F43F5E, #BE123C); border:1px solid #CBD5E1; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; text-shadow:1px 1px 2px #000; margin:12px 0;">
+                Tubo Problema: Rojo Cereza / Rosa Intenso Homogéneo (&gt; 60 s)
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Aspecto Visual:</b> Solución traslúcida homogénea de color <b>rojo brillante o rojo cereza</b> que resiste el cambio de color durante al menos 60 segundos tras añadir el NaOH al 15%.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO (SANGRE NORMAL)</span>
+            <h4 style="margin:8px 0;">Viraje Inmediato a Marrón Verdoso / Café Sucio</h4>
+            <div style="height:65px; width:100%; border-radius:8px; background:linear-gradient(90deg, #57534E, #4D4C38, #78350F); border:1px solid #CBD5E1; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; text-shadow:1px 1px 2px #000; margin:12px 0;">
+                Tubo Testigo / Negativo: Marrón Verdoso / Café Pajizo (&lt; 10 s)
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Aspecto Visual:</b> La solución pierde el tono rojizo en menos de 10 segundos y se torna <b>marrón verdosa, café sucia o amarillo pajizo</b> por formación de hematina alcalina.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "Hemoglobina Fetal (HbF) en sangre de recién nacidos y lactantes (naturalmente resistente a la desnaturalización alcalina). Exceso de sangre en la dilución inicial que enmascara el viraje a café."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "Niveles de COHb menores al 20% (fumadores o exposición leve, donde el color marrón de la O₂Hb predomina); lectura tardía (> 5–10 min, cuando la COHb termina desnaturalizándose); sangre intensamente putrefacta."},
+            {"Tipo": "Interferencia por Metahemoglobina", "Causa / Sustancia Interferente": "Agentes oxidantes (cloratos, nitritos, nitratos, anilina, dapsona, benzocaína, herbicidas de urea) oxidan el Fe²⁺ del grupo hemo a Fe³⁺ (metahemoglobina), tornando la sangre marrón desde antes de agregar el NaOH (se diferencia añadiendo 200 µL de KCN al 10% a 1 mL de sangre, lo que produce color rojo inmediato)."}
+        ]
+    },
+
+    "3. Venenos: Cianuros (CN⁻) — Prueba de Azul de Prusia": {
+        "titulo": "Análisis de Venenos: Cianuros (CN⁻) — Reacción de Azul de Prusia (Sulfato Ferroso B / FeCl₃)",
+        "fundamento": (
+            "Al alcalinizar la muestra (o el destilado de ácido cianhídrico <b>HCN</b>) con <b>NaOH al 10% p/v</b> y añadir una solución recién preparada de <b>sulfato ferroso (FeSO<sub>4</sub> al 10% p/v)</b>, los iones cianuro (CN<sup>-</sup>) reaccionan con el Fe<sup>2+</sup> formando el anión complejo soluble <b>hexacianoferrato (II), [Fe(CN)<sub>6</sub>]<sup>4-</sup></b>. "
+            "En presencia de iones férricos (<b>Fe<sup>3+</sup></b>, formados por oxidación parcial o añadidos directamente con <b>cloruro férrico FeCl<sub>3</sub> al 5% p/v preparado al momento</b>) y al agregar suficiente <b>HCl al 10% v/v</b> para disolver el precipitado verdoso-castaño de hidróxidos de hierro, se revela un color y precipitado azul intenso insoluble de <b>ferrocianuro férrico, Fe<sub>4</sub>[Fe(CN)<sub>6</sub>]<sub>3</sub> (Azul de Prusia)</b>. "
+            "Adicionalmente, el FeCl<sub>3</sub> al 5% (50 g/L) detecta directamente <b>tiocianatos (SCN<sup>-</sup>, metabolito del cianuro)</b> formando un complejo rojo sangre [Fe(SCN)]<sup>2+</sup> (LOD = 50 mg/L)."
+        ),
+        "reaccion_general": "1) 6 CN⁻ + Fe²⁺ (en NaOH 10%) ⟶ [Fe(CN)₆]⁴⁻   |   2) 3 [Fe(CN)₆]⁴⁻ + 4 Fe³⁺ (en HCl 10%) ⟶ Fe₄[Fe(CN)₆]₃ ↓ (Azul de Prusia)",
+        "reactivos": [
+            {
+                "Reactivo": "Sulfato Ferroso (FeSO₄·7H₂O) al 10% p/v",
+                "Estabilidad / Escala": "⚠️ PREPARAR AL MOMENTO — Escala de 1 mL (No almacenable, se oxida al aire)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 0.100 g (100 mg) de FeSO₄·7H₂O en balanza analítica y disolver inmediatamente antes de usar en 1000 µL (1.0 mL) de agua destilada recién hervida y enfriada."
+            },
+            {
+                "Reactivo": "Cloruro Férrico (FeCl₃) al 5% p/v (50 g/L)",
+                "Estabilidad / Escala": "⚠️ PREPARAR AL MOMENTO — Escala de 1 mL (No almacenable, se hidroliza)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 0.050 g (50.0 mg) de FeCl₃ anhidro —o 0.0825 g (82.5 mg) de FeCl₃·6H₂O hexahidratado— en balanza analítica y disolver al momento en 1000 µL (1.0 mL) de agua destilada con micropipeta."
+            },
+            {
+                "Reactivo": "Hidróxido de Sodio (NaOH) al 10% p/v",
+                "Estabilidad / Escala": "Almacenable en frasco plástico — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 1.000 g de NaOH en balanza analítica y disolver en agua destilada hasta aforar a 10 mL."
+            },
+            {
+                "Reactivo": "Ácido Clorhídrico (HCl) al 10% v/v",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Medir con micropipeta 1000 µL (1.0 mL) de HCl concentrado y llevar a 10 mL con agua destilada."
+            },
+            {
+                "Reactivo": "Picrato de Sodio (Prueba complementaria de Steyn en papel)",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 0.500 g (500 mg) de bicarbonato de sodio (NaHCO₃) y 0.050 g (50 mg) de ácido pícrico en balanza analítica y disolver hasta aforar a 10 mL con agua destilada."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Alcalinización (1 : 2)",
+                "desc": "Diluir 500 µL de la muestra (o destilado alcalino) con 1000 µL de solución de NaOH al 10% p/v (proporción 1 mL muestra : 2 mL NaOH 10%).",
+                "conc": "500 µL Muestra + 1000 µL NaOH"
+            },
+            {
+                "title": "Adición de FeSO₄ (y FeCl₃)",
+                "desc": "Añadir 1000 µL de la solución recién preparada de FeSO₄ al 10% p/v (y 50 µL de FeCl₃ al 5% preparado al momento para aportar Fe³⁺ inmediato).",
+                "conc": "1000 µL FeSO₄ 10%"
+            },
+            {
+                "title": "Disolución con HCl 10%",
+                "desc": "Agregar suficiente solución de HCl al 10% v/v gota a gota hasta disolver por completo el precipitado de hidróxido ferroso/férrico.",
+                "conc": "HCl 10% v/v c.b.p."
+            },
+            {
+                "title": "Lectura de Azul de Prusia",
+                "desc": "Observar la aparición de una coloración o precipitado azul intenso (Azul de Prusia) que confirma la presencia de cianuro.",
+                "conc": "Azul de Prusia ↓"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO A CIANUROS (CN⁻)</span>
+            <h4 style="margin:8px 0;">Precipitado o Coloración Azul de Prusia Intenso</h4>
+            <div style="height:65px; width:100%; border-radius:8px; background:linear-gradient(180deg, #1E3A8A 20%, #172554 60%, #0F172A 100%); border:1px solid #CBD5E1; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; text-shadow:1px 1px 2px #000; margin:12px 0;">
+                Azul de Prusia Profundo + Sedimento Floculento Azul Oscuro (Fe₄[Fe(CN)₆]₃ ↓)
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Cambio de Color y Forma:</b> Tras disolver el hidróxido ferroso con HCl al 10%, aparece un <b>color azul profundo (Azul de Prusia)</b> con <b>precipitado floculento azul intenso</b>.<br>
+                <i>(En papel de Picrato de Sodio/Steyn a 30 °C: el papel amarillo vira a naranja ⟶ naranja-marrón ⟶ rojo; para Tiocianatos con FeCl₃ 5%: color rojo profundo).</i>
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO A CIANUROS</span>
+            <h4 style="margin:8px 0;">Solución Amarilla Pálida o Incolora Límpida (Sin Precipitado)</h4>
+            <div style="height:65px; width:100%; border-radius:8px; background:linear-gradient(90deg, #FEF9C3, #FEF08A); border:1px solid #CBD5E1; display:flex; align-items:center; justify-content:center; color:#003366; font-weight:bold; margin:12px 0;">
+                Amarillo Pálido Transparente (Sin coloración ni precipitado azul)
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Aspecto Visual:</b> Al disolver los hidróxidos de hierro con HCl al 10%, la solución queda <b>transparente e incolora o amarillo muy pálido</b>, sin rastro de color azul.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Especificidad / Falsos Positivos", "Causa / Sustancia Interferente": "La reacción de Azul de Prusia con FeSO₄/HCl es altamente específica para cianuro libre y carece de interferencias comunes (salvo ferrocianuros o ferricianuros preexistentes si no se destila antes el HCN). En cambio, en la prueba de papel de Picrato de Sodio (Steyn) dan falso positivo compuestos con grupos ciano como cimetidina, difenoxilato e isoaminilo."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "No preparar al momento la solución de FeSO₄ al 10% en agua recién hervida y enfriada; volatilización previa del HCN (p. eb. 25.6 °C) en muestras mal cerradas; o exceso extremo de HCl concentrado."},
+            {"Tipo": "Interferencias de Matriz", "Causa / Sustancia Interferente": "El sulfuro de hidrógeno (H₂S) de tejidos putrefactos forma FeS negro en el paso alcalino con NaOH, pero se disuelve completamente al añadir el HCl al 10%, permitiendo observar el Azul de Prusia sin interferencia."}
+        ]
+    },
+
+    "4. Venenos: Arsénico (As), Fósforo (P) y Cianuro (CN⁻) — Prueba de Nitrato de Plata": {
+        "titulo": "Análisis de Venenos (As, P y CN⁻) — Reacción con Nitrato de Plata (AgNO₃)",
+        "fundamento": (
+            "El <b>Nitrato de Plata (AgNO<sub>3</sub>)</b> permite identificar y diferenciar venenos volátiles y aniones tanto en <b>fase vapor (Ensayos de Scherer y Gutzeit)</b> como por <b>precipitación y solubilidad en solución (con HNO<sub>3</sub> 2 mol/L y NH<sub>4</sub>OH concentrado)</b>:<br>"
+            "• <b>Fósforo blanco / Fosfuros (P / PH<sub>3</sub> — Ensayo de Scherer):</b> En medio ácido (H<sub>2</sub>SO<sub>4</sub> al 10% v/v) sin zinc, el gas fosfina (PH<sub>3</sub>) reduce directamente el papel impregnado con AgNO<sub>3</sub> a <b>plata metálica negra (Ag<sup>0</sup>)</b>.<br>"
+            "• <b>Arsénico (As / AsH<sub>3</sub> — Ensayos de Gutzeit, Dietilditiocarbamato de Plata y Reinsch):</b> Con Zinc en ácido se genera gas arsina (AsH<sub>3</sub>), que con AgNO<sub>3</sub> forma un complejo <b>amarillo (AsAg<sub>3</sub>·3AgNO<sub>3</sub>)</b> que vira a <b>negro (Ag<sup>0</sup>)</b> con agua, o complejo rojo-violeta específico al burbujear en solución de <b>dietilditiocarbamato de plata</b> en efedrina/cloroformo. En el <i>Ensayo de Reinsch</i> (lámina de cobre electrolítico en HCl conc. a ebullición), el As deposita una película negra mate que <b>se disuelve selectivamente en cianuro de potasio (KCN) al 10% (100 g/L)</b>, diferenciándose de Sb y Bi (LOD = 5 mg/L).<br>"
+            "• <b>En Solución y Confirmación de Cianuro:</b> El ion <b>CN<sup>-</sup></b> da precipitado <b>blanco cuajado (AgCN↓)</b> soluble en NH<sub>4</sub>OH (confirmable en fase vapor mediante papel de <b>Ácido Pícrico 0.5% – Carbonato de Sodio 5% [Prueba de Steyn]</b>, que vira de amarillo a rojo-naranja); el <b>arseniato (AsO<sub>4</sub><sup>3-</sup>)</b> da precipitado <b>rojo ladrillo (Ag<sub>3</sub>AsO<sub>4</sub>↓)</b>; y el <b>fosfato (PO<sub>4</sub><sup>3-</sup>)</b> da precipitado <b>amarillo (Ag<sub>3</sub>PO<sub>4</sub>↓)</b>."
+        ),
+        "reaccion_general": "Gas: AsH₃ / PH₃ + 6 AgNO₃ ⟶ Complejo Amarillo ⟶ (+H₂O) 6 Ag⁰ ↓ (Negro)   |   Solución: CN⁻ + Ag⁺ ⟶ AgCN ↓ (Blanco) | AsO₄³⁻ + 3Ag⁺ ⟶ Ag₃AsO₄ ↓ (Rojo ladrillo) | PO₄³⁻ + 3Ag⁺ ⟶ Ag₃PO₄ ↓ (Amarillo)",
+        "reactivos": [
+            {
+                "Reactivo": "Nitrato de Plata (AgNO₃) Concentrado al 50% p/v (Para tirilla Gutzeit)",
+                "Estabilidad / Escala": "⚠️ PREPARAR AL MOMENTO — Escala de 1 mL (Se fotorreduce rápidamente)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 0.500 g (500 mg) de AgNO₃ en balanza analítica y disolver al momento en 1000 µL (1.0 mL) de agua destilada libre de cloruros con micropipeta."
+            },
+            {
+                "Reactivo": "Nitrato de Plata (AgNO₃) Acuoso al 1% p/v (10 g/L) / 5% p/v",
+                "Estabilidad / Escala": "Almacenable en frasco ámbar — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 0.100 g (100 mg para solución de 10 g/L en tubo) o 0.500 g (500 mg para solución al 5%) de AgNO₃ en balanza analítica y aforar a 10 mL con agua destilada libre de cloruros."
+            },
+            {
+                "Reactivo": "Acetato de Plomo al 10% p/v + Ácido Acético 2 mol/L (Trampa de sulfuros H₂S)",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL (Relación 10 : 1)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 1.000 g de acetato de plomo en 10 mL de agua hervida y purificada. Para impregnar el papel filtro trampa de H₂S, mezclar 9.0 mL (9000 µL) de acetato de plomo al 10% con 900 µL de ácido acético 2 mol/L (LOD para sulfuros = 50 mg/L)."
+            },
+            {
+                "Reactivo": "Ácido Sulfúrico (H₂SO₄) al 10% v/v + Granallas de Zinc libre de As",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL (y 0.5 g de Zn sólido para As)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Medir con micropipeta 1000 µL (1.0 mL) de H₂SO₄ concentrado y aforar a 10 mL con agua destilada. Pesar 0.500 g de Zinc únicamente para la reducción de Arsénico (Gutzeit)."
+            },
+            {
+                "Reactivo": "Ácido Nítrico (HNO₃) 2 mol/L e Hidróxido de Amonio (NH₄OH) concentrado",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL de HNO₃ 2 mol/L: medir 1280 µL de HNO₃ concentrado (65%) con micropipeta y aforar a 10 mL con agua destilada. Usar 100 µL de NH₄OH concentrado para pruebas de solubilidad del precipitado de plata."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Generación en Tubo",
+                "desc": "A 1000 µL de muestra en un tubo añadir 3000 µL de H₂SO₄ al 10% v/v (para Fósforo/Scherer calentar suavemente sin Zn; para Arsénico/Gutzeit añadir 0.5 g de Zn).",
+                "conc": "H₂SO₄ 10%: 3000 µL"
+            },
+            {
+                "title": "Trampa de Sulfuros (Pb²⁺)",
+                "desc": "Insertar en el cuello del tubo papel o algodón impregnado con la mezcla 10:1 de Acetato de Plomo al 10% y Ácido Acético 2 mol/L para retener vapores de H₂S.",
+                "conc": "Filtro Pb(AcO)₂ 10%"
+            },
+            {
+                "title": "Tirilla con AgNO₃",
+                "desc": "Colocar en la boca del tubo papel filtro con 20 µL de AgNO₃ (al 50% recién preparado para Gutzeit/As; al 1–5% para Scherer/P) y observar el ennegrecimiento.",
+                "conc": "Tirilla: 20 µL AgNO₃"
+            },
+            {
+                "title": "Precipitación en Solución",
+                "desc": "En 1000 µL de solución clara añadir 100 µL de AgNO₃ (10 g/L), centrifugar el precipitado y probar su solubilidad añadiendo 100 µL de NH₄OH concentrado.",
+                "conc": "100 µL AgNO₃ + 100 µL NH₄OH"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADOS POSITIVOS (EN TIRILLA Y EN SOLUCIÓN)</span>
+            <h4 style="margin:8px 0;">Ennegrecimiento de Tirilla (Ag⁰) y Precipitados Diferenciales</h4>
+            <div style="display:flex; justify-content:space-between; gap:8px; margin:12px 0;">
+                <div style="flex:1; height:60px; border-radius:6px; background:linear-gradient(135deg, #FACC15 35%, #18181B 65%); border:1px solid #94A3B8; color:#FFF; font-size:0.72rem; font-weight:bold; display:flex; align-items:center; justify-content:center; text-shadow:1px 1px 2px #000; padding:4px;">
+                    Tirilla (As / P):<br>Amarillo ⟶ Negro (Ag⁰)
+                </div>
+                <div style="flex:1; height:60px; border-radius:6px; background:#F8FAFC; border:2px solid #94A3B8; color:#003366; font-size:0.72rem; font-weight:bold; display:flex; align-items:center; justify-content:center; padding:4px;">
+                    Solución CN⁻:<br>Precipitado Blanco (AgCN↓)
+                </div>
+                <div style="flex:1; height:60px; border-radius:6px; background:#9A3412; border:1px solid #94A3B8; color:#FFF; font-size:0.72rem; font-weight:bold; display:flex; align-items:center; justify-content:center; padding:4px;">
+                    Solución AsO₄³⁻:<br>Rojo Ladrillo (Ag₃AsO₄↓)
+                </div>
+                <div style="flex:1; height:60px; border-radius:6px; background:#EAB308; border:1px solid #94A3B8; color:#003366; font-size:0.72rem; font-weight:bold; display:flex; align-items:center; justify-content:center; padding:4px;">
+                    Solución PO₄³⁻:<br>Amarillo (Ag₃PO₄↓)
+                </div>
+            </div>
+            <p style="font-size:0.86rem; margin-bottom:0;">
+                <b>En Tirilla:</b> Mancha amarilla que vira a <b>negro metálico (As)</b> o ennegrecimiento directo sin Zn <b>(P)</b>.<br>
+                <b>En Solución:</b> Precipitado <b>blanco cuajado soluble en NH<sub>4</sub>OH (CN<sup>-</sup>)</b>, <b>rojo ladrillo (AsO<sub>4</sub><sup>3-</sup>)</b> o <b>amarillo (PO<sub>4</sub><sup>3-</sup>)</b>.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO</span>
+            <h4 style="margin:8px 0;">Tirilla Blanca Inalterada y Solución Transparente</h4>
+            <div style="height:60px; width:100%; border-radius:8px; background:#FFFFFF; border:2px dashed #94A3B8; display:flex; align-items:center; justify-content:center; color:#475569; font-weight:bold; margin:12px 0;">
+                Papel Reactivo Blanco Sin Mancha  |  Solución Límpida e Incolora (Sin Precipitado)
+            </div>
+            <p style="font-size:0.86rem; margin-bottom:0;">
+                <b>Aspecto Visual:</b> La tirilla de AgNO<sub>3</sub> conserva su color blanco original sin oscurecerse y la solución permanece transparente sin precipitado.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "Los vapores de sulfuro de hidrógeno (H₂S, LOD = 50 mg/L) de muestras en putrefacción ennegrecen el AgNO₃ formando Ag₂S negro (se eliminan con el papel filtro previo de Acetato de Plomo al 10%). En solución directa, los cloruros (Cl⁻) dan precipitado blanco soluble en NH₄OH, los bromuros (Br⁻) precipitado blanco-crema poco soluble y los yoduros (I⁻) precipitado amarillo cuajado insoluble en NH₄OH."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "Presencia de oxidantes fuertes (HNO₃ libre o hipoclorito) en el tubo generador que oxidan la fosfina (PH₃) o arsina (AsH₃) impidiendo su volatilización; o exceso de ácido nítrico al precipitar Ag₃AsO₄ o Ag₃PO₄ en solución."},
+            {"Tipo": "Interferencias", "Causa / Sustancia Interferente": "El antimonio (SbH₃, estibina) también oscurece la tirilla de AgNO₃ (en el ensayo de Reinsch, la mancha de As sobre cobre se disuelve en KCN 100 g/L mientras que Sb y Bi no se disuelven). Compuestos con grupos orto/para-dihidroxifenol o ácido ascórbico reducen el AgNO₃ amoniacal a Ag⁰ negro en solución."}
+        ]
+    },
+
+    "5. Venenos: Fósforo (P) y Arsénico (As) — Prueba con Molibdato de Amonio": {
+        "titulo": "Análisis de Venenos (P y As) — Reacción con Molibdato de Amonio",
+        "fundamento": (
+            "Tras someter la muestra (o el destilado/tirilla de Scherer) a una <b>digestión ácida oxidante con ácido nítrico concentrado (HNO<sub>3</sub>, 500 µL) y ácido sulfúrico concentrado (H<sub>2</sub>SO<sub>4</sub>, 200 µL) a 100 °C durante 30 minutos</b>, el fósforo elemental, fosfuros o compuestos organofosforados se oxidan a <b>ion ortofosfato (PO<sub>4</sub><sup>3-</sup>)</b> —y el arsénico a <b>ion arseniato (AsO<sub>4</sub><sup>3-</sup>)</b>—.<br>"
+            "Al enfriar y añadir <b>1000 µL (1.0 mL) de solución de Molibdato de Amonio al 10% p/v</b> seguido de calentamiento en baño de agua a <b>100 °C por 5 minutos</b>, se forma una <b>solución o precipitado cristalino amarillo brillante</b> de dodecamolibdofosfato de amonio, <b>(NH<sub>4</sub>)<sub>3</sub>[P(Mo<sub>3</sub>O<sub>10</sub>)<sub>4</sub>]↓</b> (o arsenomolibdato de amonio). "
+            "Al añadir una gota de reductor recién preparado (ácido ascórbico o SnCl<sub>2</sub>), el Mo<sup>6+</sup> del complejo se reduce parcialmente a Mo<sup>5+</sup> formando <b>Azul de Molibdeno</b>."
+        ),
+        "reaccion_general": "H₃PO₄ (ó H₃AsO₄) + 12 (NH₄)₂MoO₄ + 21 HNO₃  ⟶  (NH₄)₃[P/As(Mo₃O₁₀)₄] ↓ (Amarillo Brillante) + 21 NH₄NO₃ + 12 H₂O",
+        "reactivos": [
+            {
+                "Reactivo": "Solución de Molibdato de Amonio al 10% p/v",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar en balanza analítica 1.000 g de molibdato de amonio [(NH₄)₆Mo₇O₂₄·4H₂O] y disolver en agua destilada (o medio nítrico diluido) hasta aforar a 10 mL. Se emplean 1000 µL (1.0 mL) por prueba."
+            },
+            {
+                "Reactivo": "Ácido Nítrico Concentrado (HNO₃) y Ácido Sulfúrico Concentrado (H₂SO₄)",
+                "Estabilidad / Escala": "Almacenables — Dosificación exacta con micropipeta por prueba",
+                "Preparación (Balanza Analítica y Micropipeta)": "Medir con micropipeta 500 µL (0.5 mL) de HNO₃ concentrado y 200 µL (0.2 mL) de H₂SO₄ concentrado por cada tubo de ensayo (muestra y blanco)."
+            },
+            {
+                "Reactivo": "Solución Reductora Confirmatoria (Ácido Ascórbico o SnCl₂ al 5% p/v)",
+                "Estabilidad / Escala": "⚠️ PREPARAR AL MOMENTO — Escala de 1 mL (No almacenable, se oxida al aire)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 0.050 g (50.0 mg) de ácido ascórbico (o SnCl₂·2H₂O) en balanza analítica y disolver al momento en 1000 µL (1.0 mL) de agua destilada con micropipeta."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Digestión Ácida Oxidante",
+                "desc": "A la muestra en un tubo de ensayo agregar con micropipeta 500 µL (0.5 mL) de HNO₃ concentrado y 200 µL (0.2 mL) de H₂SO₄ concentrado (tratar un blanco en paralelo).",
+                "conc": "500 µL HNO₃ + 200 µL H₂SO₄"
+            },
+            {
+                "title": "Calentamiento (30 min)",
+                "desc": "Calentar el tubo a 100 °C en baño de agua durante 30 minutos para oxidar el fósforo/fosfuros u organofosforados a PO₄³⁻ (o As a AsO₄³⁻) y dejar enfriar.",
+                "conc": "100 °C por 30 min"
+            },
+            {
+                "title": "Adición de Molibdato 10%",
+                "desc": "A la solución fría añadir 1000 µL (1.0 mL) de solución de Molibdato de Amonio al 10% p/v.",
+                "conc": "Molibdato 10%: 1000 µL"
+            },
+            {
+                "title": "Revelado a 100 °C (5 min)",
+                "desc": "Colocar nuevamente en el baño de agua a 100 °C durante 5 minutos (en fosfatos libres precipita desde 40–50 °C) y observar el precipitado amarillo brillante.",
+                "conc": "100 °C por 5 min"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO A FÓSFORO (P) O ARSÉNICO (As)</span>
+            <h4 style="margin:8px 0;">Solución o Precipitado Amarillo Brillante (+ Confirmación Azul de Molibdeno)</h4>
+            <div style="display:flex; gap:10px; margin:12px 0;">
+                <div style="flex:1; height:65px; border-radius:8px; background:linear-gradient(180deg, #FEF9C3 25%, #FACC15 65%, #EAB308 100%); border:1px solid #CA8A04; display:flex; align-items:center; justify-content:center; color:#003366; font-weight:bold; font-size:0.82rem; padding:6px;">
+                    1° Solución / Precipitado Amarillo Brillante Intenso ↓
+                </div>
+                <div style="flex:1; height:65px; border-radius:8px; background:linear-gradient(135deg, #1D4ED8, #1E3A8A); border:1px solid #1E40AF; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; font-size:0.82rem; padding:6px;">
+                    2° Confirmación (+50 µL Reductor): Azul de Molibdeno
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Cambio de Color y Forma:</b> Formación de una <b>solución o precipitado cristalino amarillo brillante</b> de fosfomolibdato de amonio (o arsenomolibdato a 100 °C). Al añadir 50 µL del reductor recién preparado vira a <b>Azul de Molibdeno</b>.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO</span>
+            <h4 style="margin:8px 0;">Solución Totalmente Incolora y Transparente (Igual al Blanco)</h4>
+            <div style="height:65px; width:100%; border-radius:8px; background:linear-gradient(90deg, #F8FAFC, #F1F5F9); border:1px solid #CBD5E1; display:flex; align-items:center; justify-content:center; color:#475569; font-weight:bold; margin:12px 0;">
+                Líquido Transparente e Incoloro (Ausencia de Color o Precipitado Amarillo)
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Aspecto Visual:</b> La solución permanece <b>completamente transparente e incolora</b> igual al tubo blanco tras el calentamiento a 100 °C por 5 minutos.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "Plaguicidas organofosforados (especialmente si la muestra es un líquido inmiscible en agua) y fármacos fosforados como ciclofosfamida y triclofós dan reacción positiva amarilla brillante. Fosfatos biológicos endógenos si se analiza tejido o fluido sin destilación previa del fósforo blanco/fosfina. Silicatos (SiO₃²⁻) extraídos del vidrio forman silicomolibdato amarillo."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "Digestión oxidante incompleta con HNO₃/H₂SO₄ (los fosfitos H₃PO₃ y arsenitos H₃AsO₃ trivalentes no reaccionan con el molibdato de amonio hasta oxidarse a estado pentavalente +5). Presencia de tartratos, citratos, oxalatos o fluoruros que secuestran al molibdeno."},
+            {"Tipo": "Interferencia Térmica (P vs. As)", "Causa / Sustancia Interferente": "A 100 °C tanto el ortofosfato (PO₄³⁻) como el arseniato (AsO₄³⁻) forman precipitados amarillos isomorfos; para diferenciarlos sin separación previa, el fosfato precipita desde 40–50 °C mientras que el arseniato requiere ebullición a 100 °C."}
+        ]
+    }
+}
+
+
+ANALISIS_SEROLOGICOS_DB = {
+    "1. Aglutinación Directa en Placa (Grupo Sanguíneo ABO y Factor Rh)": {
+        "titulo": "Serología Hematológica Forense — Aglutinación Directa (Grupo Sanguíneo ABO / Rh)",
+        "fundamento": (
+            "Se basa en una <b>reacción inmunológica específica antígeno-anticuerpo de hemaglutinación directa</b>. "
+            "Las membranas de los eritrocitos contienen glicoproteínas y glicolípidos antigénicos (<b>aglutinógenos A, B y D/Rh</b>). "
+            "Al enfrentarse con anticuerpos monoclonales específicos tipo <b>IgM (hemoclasificadores Anti-A, Anti-B y Anti-D)</b>, la estructura pentamérica de la IgM (con 10 sitios de unión) forma puentes intercelulares que enlazan múltiples eritrocitos simultáneamente en una <b>red tridimensional visible como grumos macroscópicos ('arenilla')</b>. "
+            "Requiere eritrocitos con membrana íntegra; si la muestra presenta hemólisis total, los antígenos quedan sueltos en el plasma y no se forman grumos."
+        ),
+        "reaccion_general": "Eritrocitos (Antígeno A / B / D) + Anticuerpo Monoclonal IgM (Anti-A / Anti-B / Anti-D)  ⟶  Red Tridimensional de Hemaglutinación (Grumos Macroscópicos)",
+        "reactivos": [
+            {
+                "Reactivo": "Solución Salina Fisiológica Isotónica (NaCl al 0.9% p/v)",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Pesar 0.090 g (90 mg) de NaCl grado analítico en balanza analítica y disolver en agua destilada hasta aforar a 10 mL."
+            },
+            {
+                "Reactivo": "Suero Hemoclasificador Monoclonal Anti-A (Color Azul)",
+                "Estabilidad / Escala": "Almacenable en refrigeración (2–8 °C)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Reactivo monoclonal comercial listo para uso. Medir 50 µL (1 gota) por determinación."
+            },
+            {
+                "Reactivo": "Suero Hemoclasificador Monoclonal Anti-B (Color Amarillo)",
+                "Estabilidad / Escala": "Almacenable en refrigeración (2–8 °C)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Reactivo monoclonal comercial listo para uso. Medir 50 µL (1 gota) por determinación."
+            },
+            {
+                "Reactivo": "Suero Hemoclasificador Monoclonal Anti-D / Rh (Incoloro)",
+                "Estabilidad / Escala": "Almacenable en refrigeración (2–8 °C)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Reactivo monoclonal comercial listo para uso. Medir 50 µL (1 gota) por determinación."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Marcaje de Placa",
+                "desc": "Limpiar un portaobjetos o placa de vidrio y rotular cuatro áreas circulares: Anti-A, Anti-B, Anti-D (Rh) y Autocontrol (Salina).",
+                "conc": "4 Áreas en Placa"
+            },
+            {
+                "title": "Adición de Reactivos",
+                "desc": "Depositar 50 µL (1 gota) de Anti-A, Anti-B, Anti-D y Solución Salina al 0.9% en sus círculos correspondientes.",
+                "conc": "50 µL Reactivo / área"
+            },
+            {
+                "title": "Adición de Eritrocitos",
+                "desc": "Agregar 50 µL (1 gota) de sangre entera íntegra (o suspensión globular al 5% en salina) junto a cada reactivo y mezclar con aplicadores individuales.",
+                "conc": "50 µL Muestra / área"
+            },
+            {
+                "title": "Balanceo y Lectura",
+                "desc": "Balancear suavemente la placa con movimiento circular durante 30 a 60 segundos (máximo 2 minutos) y observar la presencia de grumos.",
+                "conc": "Lectura: 30–60 s"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO (CAMBIO DE FORMA: AGLUTINACIÓN)</span>
+            <h4 style="margin:8px 0;">Formación de Grumos Rojos ("Arenilla") en Medio Claro</h4>
+            <div style="display:flex; justify-content:center; gap:20px; margin:12px 0;">
+                <div style="width:95px; height:95px; border-radius:50%; background:radial-gradient(circle at 25% 30%, #991B1B 8%, transparent 10%), radial-gradient(circle at 65% 25%, #B91C1C 9%, transparent 11%), radial-gradient(circle at 45% 55%, #7F1D1D 10%, transparent 12%), radial-gradient(circle at 30% 72%, #991B1B 8%, transparent 10%), radial-gradient(circle at 72% 68%, #B91C1C 9%, transparent 11%), radial-gradient(circle at 55% 35%, #991B1B 7%, transparent 9%), radial-gradient(circle at 38% 42%, #B91C1C 8%, transparent 10%), #F8FAFC; border:3px solid #003366; box-shadow: inset 0 0 8px rgba(0,0,0,0.15);"></div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Morfología Visual:</b> Los eritrocitos se agrupan formando <b>grumos o cúmulos rojizos nítidos (aspecto de arenilla o ladrillo molido)</b> mientras el líquido circundante queda <b>totalmente transparente/claro</b>.<br>
+                <b>Interpretación ABO/Rh:</b> Grumos en A = <b>Grupo A</b> | Grumos en B = <b>Grupo B</b> | Grumos en A y B = <b>Grupo AB</b> | Grumos en D = <b>Rh (+)</b>.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO (SIN AGLUTINACIÓN)</span>
+            <h4 style="margin:8px 0;">Suspensión Roja Líquida Totalmente Homogénea</h4>
+            <div style="display:flex; justify-content:center; gap:20px; margin:12px 0;">
+                <div style="width:95px; height:95px; border-radius:50%; background:#DC2626; border:3px solid #003366; box-shadow: inset 0 0 10px rgba(0,0,0,0.25);"></div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Morfología Visual:</b> El círculo permanece como una <b>suspensión líquida roja opaca y uniforme</b>, sin formación de cúmulos ni clarificación del fondo.<br>
+                <b>Interpretación ABO/Rh:</b> Sin grumos en A ni en B = <b>Grupo O</b> | Sin grumos en D = <b>Rh (-)</b> | Autocontrol debe ser siempre homogéneo.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "Fenómeno de Rouleaux ('pilas de monedas' por exceso de proteínas plasmáticas o deshidratación; se corrige lavando los eritrocitos con solución salina al 0.9%). Autoaglutininas frías, contaminación bacteriana (pan-aglutinación) o lectura tardía > 2 minutos por desecación periférica."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "Hemólisis total de la muestra (al destruirse los eritrocitos no hay células que agrupar y se observa un líquido rojo traslúcido continuo, simulando un falso Grupo O Rh -). Efecto prozona o antígenos Rh débiles (Du)."},
+            {"Tipo": "Interferencia Crítica", "Causa / Sustancia Interferente": "Contaminación cruzada por usar el mismo aplicador entre Anti-A y Anti-B (provoca falso Grupo AB). No aplicable directamente sobre manchas secas en tela."}
+        ]
+    },
+
+    "2. Determinación de VIH-1 y VIH-2 (Inmunocromatografía en Placa)": {
+        "titulo": "Serología e Inmunología Forense — Detección de Anticuerpos Anti-VIH-1 y VIH-2 (Flujo Lateral)",
+        "fundamento": (
+            "Se basa en un <b>inmunoensayo inmunocromatográfico tipo 'Sándwich' de doble antígeno</b> sobre membrana de nitrocelulosa. "
+            "Los anticuerpos específicos (IgG/IgM) presentes en la muestra se unen en la almohadilla de conjugado a antígenos recombinantes de VIH marcados con <b>oro coloidal</b> (colorante rojo-púrpura). "
+            "El complejo migra por capilaridad hasta las líneas de captura (<b>T1: gp120/gp41 para VIH-1; T2: gp36 para VIH-2</b>), donde queda inmovilizado formando una banda coloreada visible. "
+            "El conjugado libre continúa hasta la <b>línea de Control (C)</b>, la cual siempre debe revelarse para validar la prueba. Todo resultado con banda en T debe reportarse pericialmente como <b>'REACCIONAL'</b> (sujeto a confirmación por Western Blot o PCR)."
+        ),
+        "reaccion_general": "Anticuerpo Muestra (IgG/IgM Anti-VIH) + Antígeno-Oro Coloidal ⟶ Migra por Capilaridad ⟶ Captura en Antígeno Fijo (Línea T: gp120/gp41/gp36) + Control (Línea C)",
+        "reactivos": [
+            {
+                "Reactivo": "Cassette de Inmunoplaca VIH-1/2 (Membrana de Nitrocelulosa)",
+                "Estabilidad / Escala": "Almacenable entre 2 °C y 30 °C (en sobre sellado)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Atemperar el cassette sellado a temperatura ambiente antes de abrir para evitar condensación de humedad sobre la nitrocelulosa."
+            },
+            {
+                "Reactivo": "Buffer Diluyente de Corrimiento (PBS pH 7.4 + Tensioactivo)",
+                "Estabilidad / Escala": "Almacenable — Preparación de 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "En caso de preparar 10 mL de buffer: pesar en balanza analítica 80.0 mg de NaCl, 14.4 mg de Na₂HPO₄, 2.4 mg de KH₂PO₄ y 2.0 mg de KCl; disolver en 8 mL de agua destilada, añadir 10 µL de Tween-20 con micropipeta y aforar a 10 mL."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Preparación de Muestra",
+                "desc": "Colocar el cassette en superficie plana. Si la sangre está coagulada, centrifugar previamente para obtener suero claro.",
+                "conc": "Suero / Plasma / Sangre"
+            },
+            {
+                "title": "Adición de Muestra (S)",
+                "desc": "Con micropipeta, depositar exactamente de 10 a 20 µL de muestra en el pocillo de muestra (S).",
+                "conc": "Alícuota: 10–20 µL"
+            },
+            {
+                "title": "Adición de Buffer",
+                "desc": "Agregar inmediatamente de 80 a 120 µL (2 a 3 gotas) de solución buffer diluyente e iniciar el cronómetro.",
+                "conc": "Buffer: 80–120 µL"
+            },
+            {
+                "title": "Lectura de Bandas",
+                "desc": "Interpretar las líneas de color estrictamente entre los 15 y 20 minutos (no leer después de 20 minutos).",
+                "conc": "Lectura: 15–20 min"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO REACCIONAL (POSITIVO DE TAMIZAJE)</span>
+            <h4 style="margin:8px 0;">Aparición de 2 Bandas Coloreadas (Línea C + Línea T)</h4>
+            <div style="width:220px; height:70px; margin:12px auto; background:#FFFFFF; border:3px solid #64748B; border-radius:8px; display:flex; align-items:center; justify-content:space-around; padding:0 20px;">
+                <div style="text-align:center;">
+                    <div style="font-size:0.75rem; font-weight:bold; color:#003366;">C</div>
+                    <div style="width:10px; height:38px; background:#BE185D; border-radius:2px;"></div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:0.75rem; font-weight:bold; color:#003366;">T</div>
+                    <div style="width:10px; height:38px; background:#BE185D; border-radius:2px;"></div>
+                </div>
+                <div style="width:28px; height:28px; border-radius:50%; background:#FEE2E2; border:2px solid #94A3B8; font-size:0.65rem; display:flex; align-items:center; justify-content:center; font-weight:bold;">S</div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Aspecto Visual:</b> Presencia de <b>dos líneas rojo-púrpura/magenta</b> (una en la zona de Control <b>C</b> y otra en la zona de Prueba <b>T1/T2</b>, incluso si la banda T es tenue). Se reporta como <b>REACCIONAL</b>.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NO REACTIVO (NEGATIVO) / INVÁLIDO</span>
+            <h4 style="margin:8px 0;">1 Sola Banda en Control (C) | Sin Banda en C = Inválido</h4>
+            <div style="width:220px; height:70px; margin:12px auto; background:#FFFFFF; border:3px solid #64748B; border-radius:8px; display:flex; align-items:center; justify-content:space-around; padding:0 20px;">
+                <div style="text-align:center;">
+                    <div style="font-size:0.75rem; font-weight:bold; color:#003366;">C</div>
+                    <div style="width:10px; height:38px; background:#BE185D; border-radius:2px;"></div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:0.75rem; font-weight:bold; color:#003366;">T</div>
+                    <div style="width:10px; height:38px; background:#F1F5F9; border:1px dashed #CBD5E1; border-radius:2px;"></div>
+                </div>
+                <div style="width:28px; height:28px; border-radius:50%; background:#FEE2E2; border:2px solid #94A3B8; font-size:0.65rem; display:flex; align-items:center; justify-content:center; font-weight:bold;">S</div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>No Reactivo (Negativo):</b> Aparece <b>únicamente la banda en C</b> y la zona T permanece totalmente blanca.<br>
+                <b>Inválido:</b> Si no aparece la línea C (repetir en un cassette nuevo).
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "Enfermedades autoinmunes (lupus, artritis reumatoide por factores reumatoides), vacunaciones recientes (influenza, hepatitis B), embarazos múltiples (anticuerpos anti-HLA) o lectura después de los 20 minutos ('líneas fantasma' por oxidación/secado)."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "Período de ventana inmunológica (infección reciente menor a 3–4 semanas sin niveles detectables de anticuerpos) o inmunosupresión severa."},
+            {"Tipo": "Interferencias", "Causa / Sustancia Interferente": "Hemólisis severa (tiñe el fondo de la membrana de nitrocelulosa de rojo oscuro impidiendo leer las bandas) y lipemia elevada (las grasas obstruyen los poros y detienen el flujo capilar)."}
+        ]
+    }
+}
+
+
+def render_ficha_forense_db(db_dict, header_title, key_prefix):
+    st.markdown(f"<h2 style='text-align:center;'>{header_title}</h2>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align:center; color:#334155; margin-bottom:15px; font-weight:600;'>Seleccione el análisis</div>", unsafe_allow_html=True)
+
+    c_l, c_m, c_r = st.columns([1, 2, 1])
+    with c_m:
+        prueba_sel = st.selectbox(
+            "Seleccione el análisis",
+            list(db_dict.keys()),
+            index=0,
+            label_visibility="collapsed",
+            key=f"sel_{key_prefix}"
+        )
+
+    datos = db_dict[prueba_sel]
+
+    # 1. Resumen del Fundamento y Reacción Química General
+    st.markdown("<hr style='border-color:#D1D5DB;'><h3 style='text-align:center;'>📖 Resumen del Fundamento y Reacción Química</h3>", unsafe_allow_html=True)
+    render_html(f"""
+    <div class="forensic-card" style="border-left: 5px solid #003366;">
+        <h4 style="margin-top:0;">{datos['titulo']}</h4>
+        <p style="font-size:0.94rem; line-height:1.5; margin-bottom:12px;">{datos['fundamento']}</p>
+        <div style="background:#FFFFFF; padding:10px 14px; border-radius:6px; border:1px solid #CBD5E1; font-family:'Courier New', monospace; font-weight:bold; font-size:0.88rem; color:#002244;">
+            {datos['reaccion_general']}
+        </div>
+    </div>
+    """)
+
+    # 2. Tabla de Reactivos con su Preparación (10 mL almacenables / 1 mL al momento)
+    st.markdown("<hr style='border-color:#D1D5DB;'><h3 style='text-align:center;'>🧪 Reactivos y Preparación (Escala 10 mL / 1 mL al Momento)</h3>", unsafe_allow_html=True)
+    st.table(datos["reactivos"])
+
+    # 3. Cómo se realiza la prueba (Procedimiento Paso a Paso)
+    st.markdown("<hr style='border-color:#D1D5DB;'><h3 style='text-align:center;'>🔄 Procedimiento de la Prueba</h3>", unsafe_allow_html=True)
+    render_step_flow(datos["pasos"])
+
+    # 4. Resultados Visuales (Positivo vs. Negativo: Cambio de Color o de Forma)
+    st.markdown("<hr style='border-color:#D1D5DB;'><h3 style='text-align:center;'>👁️ Resultados Visuales (Positivo vs. Negativo)</h3>", unsafe_allow_html=True)
+    col_pos, col_neg = st.columns(2)
+    with col_pos:
+        render_html(datos["visual_pos_html"])
+    with col_neg:
+        render_html(datos["visual_neg_html"])
+
+    # 5. Tabla de Interferencias
+    st.markdown("<hr style='border-color:#D1D5DB;'><h3 style='text-align:center;'>⚠️ Tabla de Interferencias, Falsos Positivos y Falsos Negativos</h3>", unsafe_allow_html=True)
+    st.table(datos["interferencias"])
+
+
+def tab_analisis_toxicologicos():
+    render_ficha_forense_db(ANALISIS_TOXICOLOGICOS_DB, "Toxicología", "tox")
+
+
+def tab_analisis_serologicos():
+    render_ficha_forense_db(ANALISIS_SEROLOGICOS_DB, "Serología", "sero")
+
+
+# ==============================================================================
+# FUNCIÓN PRINCIPAL (MAIN)
+# ==============================================================================
+
+
+# ==============================================================================
+# FUNCIÓN PRINCIPAL UNIFICADA (MAIN)
+# ==============================================================================
+
 def main():
     inject_custom_css()
-    st.markdown("<h1>Análisis Químico de Sustancias</h1>", unsafe_allow_html=True)
     base_dir = os.path.dirname(__file__)
     csv_path = os.path.join(base_dir, 'pH_vs_Ionizacion_Comparada_Datos.csv')
     data = load_data(csv_path)
-    if not data:
-        st.error("Error crítico: Dataset no disponible.")
-        return
-        
+
     with st.sidebar:
         st.markdown("<h2 style='text-align: center;'>Panel de Control</h2>", unsafe_allow_html=True)
         st.markdown("<hr style='border-color: #D1D5DB;'>", unsafe_allow_html=True)
-        sustancias_list = list(data.keys())
-        selected_sustancia = st.selectbox("🎯 Sustancia Objetivo (Analito)", sustancias_list, index=0)
-        selected_adulterante = st.selectbox("✂️ Sustancia de Corte", sustancias_list, index=1 if len(sustancias_list) > 1 else 0)
-        st.markdown("<br>", unsafe_allow_html=True)
-        selected_ph = st.slider("🧪 pH del Medio Extractor", 0.0, 14.0, 7.0, 0.1)
-        st.markdown("<br><br><br><div style=\"background-color: #E5E7EB; padding: 15px; border-radius: 8px; border: 1px solid #D1D5DB; text-align: center; font-size: 0.8rem; color: #003366;\"><b>Realizado por:</b><br/>QFB Edgar Oswaldo Díaz Andrade<br/><br/><span style=\"color:#334155;\">Herramienta interactiva para perfilación presuntiva e instrumental.</span></div>", unsafe_allow_html=True)
-    
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📋 1. Ficha Comparativa", 
-        "🌳 2. Árbol de Decisión", 
-        "🧪 3. Preparación de Reactivos",
-        "⚗️ 4. Fisicoquímica L-L", 
-        "🔬 5. Simulador Manual L-L"
-    ])
-    with tab1: tab1_comparativa(data, selected_sustancia, selected_adulterante, selected_ph)
-    with tab2: tab2_arbol_decision()
-    with tab3: tab3_reactivos()
-    with tab4: tab4_fisicoquimica(data, selected_sustancia, selected_adulterante, selected_ph)
-    with tab5: tab5_simulador_manual()
+        
+        # 1. Elección de la página en el Panel de Control
+        modulo_seleccionado = st.radio(
+            "Seleccione el Área Forense:",
+            ["⚗️ Análisis Químico", "🧪 Toxicología"],
+            index=0,
+            key="sidebar_modulo_nav"
+        )
+        st.markdown("<hr style='border-color: #D1D5DB;'>", unsafe_allow_html=True)
+        
+        # 2. Parámetros de análisis químico: sólo fijos cuando se muestre Análisis Químico
+        if modulo_seleccionado == "⚗️ Análisis Químico":
+            st.markdown("<div style='font-size:0.92rem; font-weight:bold; color:#003366; margin-bottom:8px;'>🎯 Parámetros (Análisis Químico)</div>", unsafe_allow_html=True)
+            sustancias_list = list(data.keys()) if data else []
+            selected_sustancia = st.selectbox("🎯 Sustancia Objetivo (Analito)", sustancias_list, index=0) if sustancias_list else "Cocaína"
+            selected_adulterante = st.selectbox("✂️ Sustancia de Corte", sustancias_list, index=1 if len(sustancias_list) > 1 else 0) if sustancias_list else "Fenacetina"
+            selected_ph = st.slider("🧪 pH del Medio Extractor", 0.0, 14.0, 7.0, 0.1)
+            st.markdown("<hr style='border-color: #D1D5DB;'>", unsafe_allow_html=True)
 
-    st.markdown('''
-    <div class="footer">
-        <b>Referencias Bibliográficas:</b><br/>
-        [1] Moffat AC, Osselton MD, Widdop B, Watts J, editores. <i>Clarke's Analysis of Drugs and Poisons: In pharmaceuticals, body fluids and postmortem material</i>. 4a ed. Londres: Pharmaceutical Press; 2011.<br/>
-        [2] Oficina de las Naciones Unidas contra la Droga y el Delito (UNODC). <i>Métodos para el ensayo inmediato de drogas de uso indebido</i>. Manual para laboratorios nacionales de estupefacientes. ST/NAR/13/Rev.1. Naciones Unidas: Nueva York; 2006.<br/>
-                <span style="font-weight: bold; margin-top: 10px; display: inline-block;">Realizado por: QFB Edgar Oswaldo Díaz Andrade</span>
-    </div>
-    ''', unsafe_allow_html=True)
+        st.markdown(
+            "<div style=\"background-color: #E5E7EB; padding: 15px; border-radius: 8px; border: 1px solid #D1D5DB; text-align: center; font-size: 0.8rem; color: #003366;\">"
+            "<b>Realizado por:</b><br/>QFB Edgar Oswaldo Díaz Andrade<br/><br/>"
+            "<span style=\"color:#334155;\">Herramienta pericial para perfilación química, extracción L-L, toxicología forense y CG-MS Headspace.</span>"
+            "</div>", 
+            unsafe_allow_html=True
+        )
+
+    # ==========================================================================
+    # DESPLIEGUE SEGÚN LA PÁGINA SELECCIONADA EN EL PANEL DE CONTROL
+    # ==========================================================================
+    if modulo_seleccionado == "⚗️ Análisis Químico":
+        st.markdown("<h1>Análisis Químico de Sustancias</h1>", unsafe_allow_html=True)
+        if not data:
+            st.error("Error crítico: Dataset no disponible.")
+            return
+
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📋 1. Ficha Comparativa", 
+            "🌳 2. Árbol de Decisión", 
+            "🧪 3. Pruebas Presuntivas y Reactivos",
+            "⚗️ 4. Fisicoquímica L-L", 
+            "🔬 5. Simulador Manual L-L"
+        ])
+        with tab1: tab1_comparativa(data, selected_sustancia, selected_adulterante, selected_ph)
+        with tab2: tab2_arbol_decision()
+        with tab3: tab3_reactivos()
+        with tab4: tab4_fisicoquimica(data, selected_sustancia, selected_adulterante, selected_ph)
+        with tab5: tab5_simulador_manual()
+
+        # Referencias completas (Clarke's y UNODC) para Análisis Químico
+        st.markdown('''
+        <div class="footer">
+            <b>Referencias Bibliográficas:</b><br/>
+            [1] Moffat AC, Osselton MD, Widdop B, Watts J, editores. <i>Clarke\'s Analysis of Drugs and Poisons: In pharmaceuticals, body fluids and postmortem material</i>. 4a ed. Londres: Pharmaceutical Press; 2011.<br/>
+            [2] Oficina de las Naciones Unidas contra la Droga y el Delito (UNODC). <i>Métodos para el ensayo inmediato de drogas de uso indebido</i>. Manual para laboratorios nacionales de estupefacientes. ST/NAR/13/Rev.1. Naciones Unidas: Nueva York; 2006.<br/>
+            <span style="font-weight: bold; margin-top: 10px; display: inline-block;">Realizado por: QFB Edgar Oswaldo Díaz Andrade</span>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    else:
+        # Página de Toxicología
+        st.markdown("<h1>Toxicología Forense</h1>", unsafe_allow_html=True)
+        
+        # División de la página de Toxicología en tres: Toxicología, CG-MS HS y Serología
+        sub_tox1, sub_tox2, sub_tox3 = st.tabs([
+            "🔬 Toxicología",
+            "📊 CG-MS HS",
+            "🩸 Serología"
+        ])
+        
+        with sub_tox1:
+            tab_analisis_toxicologicos()
+            
+        with sub_tox2:
+            # CG-MS HS dividido en dos: Preparación de Reactivos y Calculadora
+            cgms_tab1, cgms_tab2 = st.tabs([
+                "🧪 Preparación de Reactivos", 
+                "🧮 Calculadora"
+            ])
+            with cgms_tab1:
+                tab_cgms_preparacion()
+            with cgms_tab2:
+                tab_cgms_calculadora()
+                
+        with sub_tox3:
+            tab_analisis_serologicos()
+
+        # Referencias para Toxicología (únicamente Clarke's, sin UNODC)
+        st.markdown('''
+        <div class="footer">
+            <b>Referencias Bibliográficas:</b><br/>
+            [1] Moffat AC, Osselton MD, Widdop B, Watts J, editores. <i>Clarke\'s Analysis of Drugs and Poisons: In pharmaceuticals, body fluids and postmortem material</i>. 4a ed. Londres: Pharmaceutical Press; 2011.<br/>
+            <span style="font-weight: bold; margin-top: 10px; display: inline-block;">Realizado por: QFB Edgar Oswaldo Díaz Andrade</span>
+        </div>
+        ''', unsafe_allow_html=True)
 
 if __name__ == '__main__':
     main()
