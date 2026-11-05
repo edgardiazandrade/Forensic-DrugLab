@@ -1346,12 +1346,17 @@ def tab_cgms_preparacion():
             format="%.0f",
             key="tab1_v_ei"
         )
-    relacion_ei_muestra = vol_ei_ul / vol_muestra_ul
-    rel_str_tab1 = f"{relacion_ei_muestra:.0f}:1" if abs(relacion_ei_muestra - round(relacion_ei_muestra)) < 0.05 else f"{relacion_ei_muestra:.1f}:1"
+    r_inv = vol_ei_ul / vol_muestra_ul if vol_muestra_ul > 0 else 1.0
+    if vol_ei_ul >= vol_muestra_ul and vol_muestra_ul > 0:
+        rel_str_tab1 = f"1:{r_inv:.0f}" if abs(r_inv - round(r_inv)) < 0.05 else f"1:{r_inv:.2f}"
+    else:
+        dir_r = vol_muestra_ul / vol_ei_ul if vol_ei_ul > 0 else 1.0
+        rel_str_tab1 = f"{dir_r:.0f}:1" if abs(dir_r - round(dir_r)) < 0.05 else f"{dir_r:.2f}:1"
+
     with c_v3:
         render_html(f"""
         <div style="background:#E5E7EB; padding:10px; border-radius:6px; border:1px solid #CBD5E1; margin-top:4px;">
-            <b>Relación (E.I. / Muestra):</b> <span class="numeric-val">{rel_str_tab1}</span><br>
+            <b>Relación (Muestra / E.I.):</b> <span class="numeric-val">{rel_str_tab1}</span><br>
             <span style="font-size:0.82rem; color:#334155;">Ajusta la concentración final esperada en matriz del Estándar Interno.</span>
         </div>
         """)
@@ -1365,8 +1370,8 @@ def tab_cgms_preparacion():
         # Matraz 1 (Solución Madre) = 100 mL
         # Matraz 2 (Matraz Final) = v_final_ml
         # Alícuota transferida = 1000 µL = 1.0 mL
-        # En matriz se busca 100.0 mg/dL -> en Matraz 2: 100.0 / relacion_ei_muestra
-        conc_solucion_ei = 100.0 / relacion_ei_muestra
+        # En matriz se busca 100.0 mg/dL -> en Matraz 2: 100.0 * (vol_muestra_ul / vol_ei_ul)
+        conc_solucion_ei = 100.0 * (vol_muestra_ul / vol_ei_ul) if vol_ei_ul > 0 else 100.0
         conc_final_matriz = 100.0
         conc_madre = conc_solucion_ei * (v_final_ml / 1.0)
 
@@ -1757,8 +1762,12 @@ def tab_cgms_calculadora():
                 key="calc_v_ei"
             )
 
-        relacion_vial = v_ei_ul / v_muestra_ul
-        rel_str_tab2 = f"{relacion_vial:.0f}:1" if abs(relacion_vial - round(relacion_vial)) < 0.05 else f"{relacion_vial:.1f}:1"
+        r_inv_calc = v_ei_ul / v_muestra_ul if v_muestra_ul > 0 else 1.0
+        if v_ei_ul >= v_muestra_ul and v_muestra_ul > 0:
+            rel_str_tab2 = f"1:{r_inv_calc:.0f}" if abs(r_inv_calc - round(r_inv_calc)) < 0.05 else f"1:{r_inv_calc:.2f}"
+        else:
+            dir_calc = v_muestra_ul / v_ei_ul if v_ei_ul > 0 else 1.0
+            rel_str_tab2 = f"{dir_calc:.0f}:1" if abs(dir_calc - round(dir_calc)) < 0.05 else f"{dir_calc:.2f}:1"
 
         if es_ei:
             conc_esperada_matriz_mg_dl = st.number_input(
@@ -1769,10 +1778,10 @@ def tab_cgms_calculadora():
                 format="%.2f",
                 key="calc_conc_obj"
             )
-            # Para el Estándar Interno, la concentración de preparación en solución se ajusta por la relación E.I./Muestra
-            conc_solucion_trabajo_mg_dl = conc_esperada_matriz_mg_dl / relacion_vial
+            # Para el Estándar Interno, la concentración de preparación en solución se ajusta por la relación Muestra/E.I.
+            conc_solucion_trabajo_mg_dl = conc_esperada_matriz_mg_dl * (v_muestra_ul / v_ei_ul) if v_ei_ul > 0 else conc_esperada_matriz_mg_dl
             conc_final_mostrada_mg_dl = conc_esperada_matriz_mg_dl
-            etiqueta_conc_final = f"{conc_final_mostrada_mg_dl:.2f} mg/dL (en matriz, relación {rel_str_tab2})"
+            etiqueta_conc_final = f"{conc_final_mostrada_mg_dl:.2f} mg/dL (en matriz, relación Muestra/E.I. {rel_str_tab2})"
         else:
             conc_esperada_matriz_mg_dl = st.number_input(
                 "Concentración deseada del Control (mg/dL):",
@@ -3159,8 +3168,7 @@ def main():
         st.markdown('''
         <div class="footer">
             <b>Referencias Bibliográficas:</b><br/>
-            [1] Fiscalía General de Justicia de la Ciudad de México (FGJCDMX). <i>Manual de Procedimientos del Laboratorio de Química Forense (Código: MP-QF-01, Versión 01)</i>. Coordinación General de Investigación Forense y Servicios Periciales; 2026.<br/>
-            [2] González Lozano, R. U., Rebollar López, E. J., & Pérez Cabrera, M. F. (2023). <i>Falsos positivos y falsos negativos de las técnicas colorimétricas para la identificación de residuos provenientes de armas de fuego</i>. <b>Revista Mexicana de Ciencias Penales</b> (INACIPE), 6(20), 123–136. DOI: 10.57042/rmcp.v6i20.635<br/>
+            [1] González Lozano, R. U., Rebollar López, E. J., & Pérez Cabrera, M. F. (2023). <i>Falsos positivos y falsos negativos de las técnicas colorimétricas para la identificación de residuos provenientes de armas de fuego</i>. <b>Revista Mexicana de Ciencias Penales</b> (INACIPE), 6(20), 123–136. DOI: 10.57042/rmcp.v6i20.635<br/>
             <span style="font-weight: bold; margin-top: 10px; display: inline-block;">Realizado por: QFB Edgar Oswaldo Díaz Andrade</span>
         </div>
         ''', unsafe_allow_html=True)
