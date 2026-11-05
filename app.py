@@ -1290,14 +1290,13 @@ def tab_cgms_preparacion():
     st.markdown("<h2 style='text-align:center;'>🧪 Preparación de Reactivos</h2>", unsafe_allow_html=True)
 
     opciones_menu = [
-        "Estándar Interno (1-Propanol) — Solución E.I. M1 (1000 mL)",
-        "Estándar Interno (1-Propanol) — Solución E.I. M2 (50 mL)",
-        "Control Bajo (CB) — Etanol 50 mg/dL (100 mL)",
-        "Control Medio (CM) — Etanol 100 mg/dL (100 mL)",
-        "Control Alto (CA) — Etanol 400 mg/dL (100 mL)"
+        "Estandar interno - 1-propanol 100 mg/dl",
+        "Control Bajo (CB) — Etanol 50 mg/dL",
+        "Control Medio (CM) — Etanol 100 mg/dL",
+        "Control Alto (CA) — Etanol 400 mg/dL"
     ]
 
-    col_sel, col_pur = st.columns([2, 1])
+    col_sel, col_pur, col_vf = st.columns([2, 1, 1])
     with col_sel:
         seleccion = st.selectbox("Seleccione el reactivo a preparar:", opciones_menu, index=0)
     with col_pur:
@@ -1309,6 +1308,18 @@ def tab_cgms_preparacion():
             step=0.1,
             format="%.2f",
             key="tab1_pureza"
+        )
+    with col_vf:
+        es_ei_sel = "Estandar interno" in seleccion or "Estándar Interno" in seleccion
+        default_vf = 50.0 if es_ei_sel else 100.0
+        v_final_ml = st.number_input(
+            "Volumen matraz final (mL):",
+            min_value=5.0,
+            max_value=5000.0,
+            value=default_vf,
+            step=10.0,
+            format="%.0f",
+            key=f"tab1_vf_{'ei' if es_ei_sel else 'ctrl'}"
         )
 
     # Sección para poner cantidad de Estándar Interno y Muestra o Control (relación en vial)
@@ -1345,80 +1356,51 @@ def tab_cgms_preparacion():
         </div>
         """)
 
-    # Determinar parámetros según selección, pureza y relación para el Estándar Interno
-    if "E.I. M1" in seleccion:
+    # Determinar parámetros según selección, pureza, volumen final y relación
+    if "Estandar interno" in seleccion or "Estándar Interno" in seleccion:
         reactivo_nombre = "1-Propanol"
         densidad = 0.804
         conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
-        vol_base_100 = (100.0 / 9.0) * 1000.0 * 1000.0 / 80400.0  # 138.20 µL exactos
+
+        # Matraz 1 (Solución Madre) = 100 mL
+        # Matraz 2 (Matraz Final) = v_final_ml
+        # Alícuota transferida = 1000 µL = 1.0 mL
+        # En matriz se busca 100.0 mg/dL -> en Matraz 2: 100.0 / relacion_ei_muestra
+        conc_solucion_ei = 100.0 / relacion_ei_muestra
+        conc_final_matriz = 100.0
+        conc_madre = conc_solucion_ei * (v_final_ml / 1.0)
+
+        # Masa en Matraz 1 (100 mL = 1 dL): masa = conc_madre (mg)
+        vol_base_100 = (conc_madre / 0.804)  # en µL
         vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
         vol_str = f"{vol_ajustado:.1f} µL"
-
-        # Concentración esperada en la matriz (con 1800 µL / 200 µL = 9 -> 11.1111 * 9 = 100.00 mg/dL)
-        conc_solucion_ei = 100.0 / 9.0
-        conc_final_matriz = conc_solucion_ei * relacion_ei_muestra
-
-        reactivos_tabla = [
-            {"Reactivo / Material": "1-Propanol", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
-            {"Reactivo / Material": "Agua Destilada", "Cantidad": "C.b.p. 1000 mL", "Concentración": "—"},
-            {"Reactivo / Material": "Matraz Aforado (E.I. M1)", "Cantidad": "1000 mL", "Concentración": f"{conc_final_matriz:.2f} mg/dL (en matriz)"}
-        ]
-        pasos = [
-            {
-                "title": "Pre-llenado",
-                "desc": "En un matraz aforado de 1000 mL (previamente rotulado), llenar con agua destilada a la mitad aproximadamente de su capacidad.",
-                "conc": "Matraz: 1000 mL"
-            },
-            {
-                "title": "Adición de 1-Propanol",
-                "desc": f"Agregar {vol_str} de 1-propanol (al {pureza_usuario:.2f}% de pureza).",
-                "conc": f"Alícuota: {vol_str}"
-            },
-            {
-                "title": "Aforo y Conservación",
-                "desc": f"Aforar a 1000 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C ({vol_ei_ul:.0f} µL E.I. + {vol_muestra_ul:.0f} µL muestra).",
-                "conc": f"{conc_final_matriz:.2f} mg/dL"
-            }
-        ]
-
-    elif "E.I. M2" in seleccion:
-        reactivo_nombre = "1-Propanol"
-        densidad = 0.804
-        conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
-        vol_base_100 = (5000.0 / 9.0) * 100.0 * 1000.0 / 80400.0  # 690.99 -> 691.0 µL exactos
-        vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
-        vol_str = f"{vol_ajustado:.1f} µL"
-
-        conc_madre = 555.56
-        conc_solucion_ei = 100.0 / 9.0
-        conc_final_matriz = conc_solucion_ei * relacion_ei_muestra
 
         reactivos_tabla = [
             {"Reactivo / Material": "1-Propanol (para Matraz 1)", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
             {"Reactivo / Material": "Matraz Aforado 1 (Solución Madre)", "Cantidad": "100 mL", "Concentración": f"{conc_madre:.2f} mg/dL"},
             {"Reactivo / Material": "Solución Madre de E.I. (para Matraz 2)", "Cantidad": "1000 µL", "Concentración": f"{conc_madre:.2f} mg/dL"},
-            {"Reactivo / Material": "Matraz Aforado 2 (Solución E.I. M2)", "Cantidad": "50 mL", "Concentración": f"{conc_final_matriz:.2f} mg/dL (en matriz)"}
+            {"Reactivo / Material": f"Matraz Aforado 2 (Matraz Final)", "Cantidad": f"{v_final_ml:.0f} mL", "Concentración": f"{conc_final_matriz:.2f} mg/dL (en matriz)"}
         ]
         pasos = [
             {
-                "title": "Matraz 1: Solución Madre",
+                "title": "Matraz 1 (100 mL): Solución Madre",
                 "desc": f"En un matraz aforado de 100 mL con agua destilada a la mitad, agregar {vol_str} de 1-propanol (al {pureza_usuario:.2f}% de pureza).",
                 "conc": f"Alícuota: {vol_str}"
             },
             {
-                "title": "Aforo Matraz 1",
-                "desc": "Aforar el matraz de 100 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C.",
+                "title": "Aforo Matraz 1 (100 mL)",
+                "desc": "Aforar el matraz de 100 mL con agua destilada, tapar con Parafilm y homogeneizar por inversión.",
                 "conc": f"{conc_madre:.2f} mg/dL"
             },
             {
-                "title": "Matraz 2: Dilución E.I. M2",
-                "desc": "En un matraz aforado de 50 mL con agua destilada a la mitad, agregar 1000 µL de la solución madre de estándar interno.",
+                "title": f"Matraz 2 ({v_final_ml:.0f} mL): Dilución Final",
+                "desc": f"En un matraz aforado de {v_final_ml:.0f} mL con agua destilada a la mitad, agregar 1000 µL de la Solución Madre (Matraz 1).",
                 "conc": "Alícuota: 1000 µL"
             },
             {
-                "title": "Aforo Matraz 2",
-                "desc": f"Aforar el matraz de 50 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C ({vol_ei_ul:.0f} µL E.I. + {vol_muestra_ul:.0f} µL muestra).",
-                "conc": f"{conc_final_matriz:.2f} mg/dL"
+                "title": f"Aforo Matraz 2 ({v_final_ml:.0f} mL)",
+                "desc": f"Aforar el matraz de {v_final_ml:.0f} mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C ({vol_ei_ul:.0f} µL E.I. + {vol_muestra_ul:.0f} µL muestra).",
+                "conc": f"{conc_final_matriz:.2f} mg/dL (en matriz)"
             }
         ]
 
@@ -1426,20 +1408,21 @@ def tab_cgms_preparacion():
         reactivo_nombre = "Etanol"
         densidad = 0.789
         conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
-        vol_base_100 = (50.0 * 100.0 * 1000.0) / 78900.0  # 63.37 -> 63.4 µL exactos
+        conc_obj = 50.0
+        vol_base_100 = (conc_obj * v_final_ml * 1000.0) / 78900.0
         vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
         vol_str = f"{vol_ajustado:.1f} µL"
 
         reactivos_tabla = [
             {"Reactivo / Material": "Etanol", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
-            {"Reactivo / Material": "Agua Destilada", "Cantidad": "C.b.p. 100 mL", "Concentración": "—"},
-            {"Reactivo / Material": "Matraz Aforado (Control Bajo)", "Cantidad": "100 mL", "Concentración": "50.00 mg/dL"}
+            {"Reactivo / Material": "Agua Destilada", "Cantidad": f"C.b.p. {v_final_ml:.0f} mL", "Concentración": "—"},
+            {"Reactivo / Material": f"Matraz Aforado (Control Bajo)", "Cantidad": f"{v_final_ml:.0f} mL", "Concentración": f"{conc_obj:.2f} mg/dL"}
         ]
         pasos = [
             {
-                "title": "Pre-llenado",
-                "desc": "En un matraz aforado de 100 mL (rotulado como Control Bajo - CB), llenar con agua destilada a la mitad de su capacidad.",
-                "conc": "Matraz: 100 mL"
+                "title": f"Pre-llenado ({v_final_ml:.0f} mL)",
+                "desc": f"En un matraz aforado de {v_final_ml:.0f} mL (rotulado como Control Bajo - CB), llenar con agua destilada a la mitad de su capacidad.",
+                "conc": f"Matraz: {v_final_ml:.0f} mL"
             },
             {
                 "title": "Adición de Etanol",
@@ -1447,9 +1430,9 @@ def tab_cgms_preparacion():
                 "conc": f"Alícuota: {vol_str}"
             },
             {
-                "title": "Aforo y Conservación",
-                "desc": "Aforar a 100 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
-                "conc": "50.00 mg/dL"
+                "title": f"Aforo y Conservación ({v_final_ml:.0f} mL)",
+                "desc": f"Aforar a {v_final_ml:.0f} mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
+                "conc": f"{conc_obj:.2f} mg/dL"
             }
         ]
 
@@ -1457,20 +1440,21 @@ def tab_cgms_preparacion():
         reactivo_nombre = "Etanol"
         densidad = 0.789
         conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
-        vol_base_100 = (100.0 * 100.0 * 1000.0) / 78900.0  # 126.74 -> 126.7 µL exactos
+        conc_obj = 100.0
+        vol_base_100 = (conc_obj * v_final_ml * 1000.0) / 78900.0
         vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
         vol_str = f"{vol_ajustado:.1f} µL"
 
         reactivos_tabla = [
             {"Reactivo / Material": "Etanol", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
-            {"Reactivo / Material": "Agua Destilada", "Cantidad": "C.b.p. 100 mL", "Concentración": "—"},
-            {"Reactivo / Material": "Matraz Aforado (Control Medio)", "Cantidad": "100 mL", "Concentración": "100.00 mg/dL"}
+            {"Reactivo / Material": "Agua Destilada", "Cantidad": f"C.b.p. {v_final_ml:.0f} mL", "Concentración": "—"},
+            {"Reactivo / Material": f"Matraz Aforado (Control Medio)", "Cantidad": f"{v_final_ml:.0f} mL", "Concentración": f"{conc_obj:.2f} mg/dL"}
         ]
         pasos = [
             {
-                "title": "Pre-llenado",
-                "desc": "En un matraz aforado de 100 mL (rotulado como Control Medio - CM), llenar con agua destilada a la mitad de su capacidad.",
-                "conc": "Matraz: 100 mL"
+                "title": f"Pre-llenado ({v_final_ml:.0f} mL)",
+                "desc": f"En un matraz aforado de {v_final_ml:.0f} mL (rotulado como Control Medio - CM), llenar con agua destilada a la mitad de su capacidad.",
+                "conc": f"Matraz: {v_final_ml:.0f} mL"
             },
             {
                 "title": "Adición de Etanol",
@@ -1478,9 +1462,9 @@ def tab_cgms_preparacion():
                 "conc": f"Alícuota: {vol_str}"
             },
             {
-                "title": "Aforo y Conservación",
-                "desc": "Aforar a 100 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
-                "conc": "100.00 mg/dL"
+                "title": f"Aforo y Conservación ({v_final_ml:.0f} mL)",
+                "desc": f"Aforar a {v_final_ml:.0f} mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
+                "conc": f"{conc_obj:.2f} mg/dL"
             }
         ]
 
@@ -1488,20 +1472,21 @@ def tab_cgms_preparacion():
         reactivo_nombre = "Etanol"
         densidad = 0.789
         conc_inicial_mg_dl = densidad * 100000.0 * (pureza_usuario / 100.0)
-        vol_base_100 = (400.0 * 100.0 * 1000.0) / 78900.0  # 506.97 -> 507.0 µL exactos
+        conc_obj = 400.0
+        vol_base_100 = (conc_obj * v_final_ml * 1000.0) / 78900.0
         vol_ajustado = vol_base_100 * (100.0 / pureza_usuario)
         vol_str = f"{vol_ajustado:.1f} µL"
 
         reactivos_tabla = [
             {"Reactivo / Material": "Etanol", "Cantidad": vol_str, "Concentración": f"{conc_inicial_mg_dl:,.2f} mg/dL"},
-            {"Reactivo / Material": "Agua Destilada", "Cantidad": "C.b.p. 100 mL", "Concentración": "—"},
-            {"Reactivo / Material": "Matraz Aforado (Control Alto)", "Cantidad": "100 mL", "Concentración": "400.00 mg/dL"}
+            {"Reactivo / Material": "Agua Destilada", "Cantidad": f"C.b.p. {v_final_ml:.0f} mL", "Concentración": "—"},
+            {"Reactivo / Material": f"Matraz Aforado (Control Alto)", "Cantidad": f"{v_final_ml:.0f} mL", "Concentración": f"{conc_obj:.2f} mg/dL"}
         ]
         pasos = [
             {
-                "title": "Pre-llenado",
-                "desc": "En un matraz aforado de 100 mL (rotulado como Control Alto - CA), llenar con agua destilada a la mitad de su capacidad.",
-                "conc": "Matraz: 100 mL"
+                "title": f"Pre-llenado ({v_final_ml:.0f} mL)",
+                "desc": f"En un matraz aforado de {v_final_ml:.0f} mL (rotulado como Control Alto - CA), llenar con agua destilada a la mitad de su capacidad.",
+                "conc": f"Matraz: {v_final_ml:.0f} mL"
             },
             {
                 "title": "Adición de Etanol",
@@ -1509,9 +1494,9 @@ def tab_cgms_preparacion():
                 "conc": f"Alícuota: {vol_str}"
             },
             {
-                "title": "Aforo y Conservación",
-                "desc": "Aforar a 100 mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
-                "conc": "400.00 mg/dL"
+                "title": f"Aforo y Conservación ({v_final_ml:.0f} mL)",
+                "desc": f"Aforar a {v_final_ml:.0f} mL con agua destilada, tapar con Parafilm y guardar de 4 °C a 8 °C hasta su uso.",
+                "conc": f"{conc_obj:.2f} mg/dL"
             }
         ]
 
@@ -1538,24 +1523,12 @@ def tab_cgms_preparacion():
 
     render_analytical_note_tox()
 
-
 # ==============================================================================
 # PESTAÑA 2: CALCULADORA DE ESTÁNDARES Y CONTROLES
 # ==============================================================================
 
 def apply_preset(preset_name):
-    if preset_name == "EI_M1":
-        st.session_state.calc_rol = "Estándar Interno (1-Propanol)"
-        st.session_state.calc_solvente = "1-Propanol"
-        st.session_state.calc_modo_inic = "Por Densidad (g/mL) y Pureza (%)"
-        st.session_state.calc_densidad = 0.804
-        st.session_state.calc_pureza = 100.0
-        st.session_state.calc_num_dil = "1 Dilución (1 Matraz)"
-        st.session_state.calc_conc_obj = 100.0
-        st.session_state.calc_v_final = 1000.0
-        st.session_state.calc_v_muestra = 200.0
-        st.session_state.calc_v_ei = 1800.0
-    elif preset_name == "EI_M2":
+    if preset_name in ["EI_M2", "EI"]:
         st.session_state.calc_rol = "Estándar Interno (1-Propanol)"
         st.session_state.calc_solvente = "1-Propanol"
         st.session_state.calc_modo_inic = "Por Densidad (g/mL) y Pureza (%)"
@@ -1624,6 +1597,10 @@ def on_rol_change():
         st.session_state.calc_solvente = "1-Propanol"
         st.session_state.calc_densidad = 0.804
         st.session_state.calc_conc_obj = 100.0
+        st.session_state.calc_num_dil = "2 Diluciones (2 Matraces: Solución Madre + Matraz Final)"
+        st.session_state.calc_v_madre = 100.0
+        st.session_state.calc_v_final = 50.0
+        st.session_state.calc_alicuota_madre_ul = 1000.0
     elif "Control Bajo" in rol:
         st.session_state.calc_solvente = "Etanol"
         st.session_state.calc_densidad = 0.789
@@ -1656,24 +1633,20 @@ def tab_cgms_calculadora():
 
     st.markdown("<h2 style='text-align:center;'>🧮 Calculadora de Estándares y Controles</h2>", unsafe_allow_html=True)
 
-    b1, b2, b3, b4, b5 = st.columns(5)
+    b1, b2, b3, b4 = st.columns(4)
     with b1:
-        if st.button("📌 E.I. M1 (1000 mL)", use_container_width=True):
-            apply_preset("EI_M1")
-            st.rerun()
-    with b2:
-        if st.button("📌 E.I. M2 (50 mL)", use_container_width=True):
+        if st.button("📌 E.I. 1-Propanol (2 Matraces)", use_container_width=True):
             apply_preset("EI_M2")
             st.rerun()
-    with b3:
+    with b2:
         if st.button("🟢 Control Bajo (50 mg/dL)", use_container_width=True):
             apply_preset("CB")
             st.rerun()
-    with b4:
+    with b3:
         if st.button("🟡 Control Medio (100 mg/dL)", use_container_width=True):
             apply_preset("CM")
             st.rerun()
-    with b5:
+    with b4:
         if st.button("🔴 Control Alto (400 mg/dL)", use_container_width=True):
             apply_preset("CA")
             st.rerun()
@@ -1813,15 +1786,20 @@ def tab_cgms_calculadora():
             conc_final_mostrada_mg_dl = conc_esperada_matriz_mg_dl
             etiqueta_conc_final = f"{conc_final_mostrada_mg_dl:.2f} mg/dL"
 
-        num_dil_str = st.selectbox(
-            "Cantidad de Diluciones:",
-            [
-                "1 Dilución (1 Matraz)",
-                "2 Diluciones (2 Matraces: Solución Madre + Matraz Final)"
-            ],
-            key="calc_num_dil"
-        )
-        num_diluciones = 1 if num_dil_str.startswith("1") else 2
+        if es_ei:
+            st.info("ℹ️ Para el **Estándar Interno**, se utiliza el protocolo estandarizado de **2 Diluciones (2 Matraces: Solución Madre + Matraz Final)**.")
+            num_diluciones = 2
+            st.session_state.calc_num_dil = "2 Diluciones (2 Matraces: Solución Madre + Matraz Final)"
+        else:
+            num_dil_str = st.selectbox(
+                "Cantidad de Diluciones:",
+                [
+                    "1 Dilución (1 Matraz)",
+                    "2 Diluciones (2 Matraces: Solución Madre + Matraz Final)"
+                ],
+                key="calc_num_dil"
+            )
+            num_diluciones = 1 if num_dil_str.startswith("1") else 2
 
         if num_diluciones == 1:
             v_final_ml = st.number_input(
@@ -2597,7 +2575,8 @@ ANALISIS_SEROLOGICOS_DB = {
 
 
 def render_ficha_forense_db(db_dict, header_title, key_prefix):
-    st.markdown(f"<h2 style='text-align:center;'>{header_title}</h2>", unsafe_allow_html=True)
+    if header_title:
+        st.markdown(f"<h2 style='text-align:center;'>{header_title}</h2>", unsafe_allow_html=True)
     st.markdown("<div style='text-align:center; color:#334155; margin-bottom:15px; font-weight:600;'>Seleccione el análisis</div>", unsafe_allow_html=True)
 
     c_l, c_m, c_r = st.columns([1, 2, 1])
@@ -2654,6 +2633,412 @@ def tab_analisis_serologicos():
 
 
 # ==============================================================================
+# PESTAÑA BALÍSTICA QUÍMICA: RESIDUOS DE DISPARO POR ARMA DE FUEGO (GSR)
+# ==============================================================================
+
+def render_analytical_note_gsr():
+    st.markdown('''
+    <div class="nota-card">
+        <b>⚠️ NOTA PERICIAL DE CONTROL ANALÍTICO:</b> Antes de procesar cualquier indicio, correr obligatoriamente el <b>Blanco de Reactivos</b> para descartar contaminación química o degradación de reactivos. Toda interpretación de residuos de disparo debe considerar la <b>ventana temporal de 6 horas</b> (tras la cual los residuos disminuyen significativamente), la dinámica de dispersión de la nube (1.5 a 2.0 m) y la ausencia de especificidad intrínseca de los metales para hechos balísticos por posibles interferencias ocupacionales.
+    </div>
+    ''', unsafe_allow_html=True)
+
+
+# ==============================================================================
+# BASE DE DATOS DE ANÁLISIS DE RESIDUOS DE DISPARO POR ARMA DE FUEGO (GSR)
+# ==============================================================================
+
+ANALISIS_GSR_DB = {
+    "1. Prueba de Griess (Nitritos — NO₂⁻)": {
+        "titulo": "Prueba de Griess — Identificación de Nitritos (NO₂⁻)",
+        "fundamento": (
+            "La <b>Prueba de Griess</b> es la técnica por excelencia para la identificación de <b>iones nitrito (NO<sub>2</sub><sup>-</sup>)</b>, "
+            "subproductos de la combustión de la pólvora. Se fundamenta en un proceso secuencial de <b>diazotación y acoplamiento azoico</b> en medio ácido:<br>"
+            "• <b>Diazotación:</b> El ion nitrito reacciona con el <b>ácido sulfanílico</b> (amina aromática primaria) en medio de ácido acético, generando un catión diazonilo reactivo ([R-N≡N]⁺).<br>"
+            "• <b>Acoplamiento Azoico:</b> La sal de diazonio ataca electrofílicamente al <b>clorhidrato de α-naftilamina</b>, produciendo un <b>azo-colorante</b> altamente conjugado que absorbe luz verde-azul y refleja un color <b>rosa brillante, rojo o magenta</b>.<br>"
+            "• <b>Fisicoquímica:</b> Al percutir el fulminante, la combustión alcanza entre <b>1500 y 2000 °C en 0.2 segundos</b>, generando presiones de hasta <b>104 kPa</b> en el cañón que expulsan una nube de partículas de <b>5 a 100 µm</b>."
+        ),
+        "reaccion_general": "1) Ácido Sulfanílico + NO₂⁻ + 2H⁺ (CH₃COOH 10%) ⟶ Sal de Diazonio [R-N≡N]⁺   |   2) [R-N≡N]⁺ + α-Naftilamina ⟶ Azo-Colorante (Rosa Brillante / Magenta Instantáneo)",
+        "reactivos": [
+            {
+                "Reactivo": "Reactivo 1 (Solución Ácida): Ácido Sulfanílico al 0.5% p/v en Ácido Acético al 10% v/v",
+                "Estabilidad / Escala": "Almacenable en frasco ámbar y refrigeración — Escala 10 mL (o 100 mL)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL: medir con micropipeta 1.0 mL (1000 µL) de ácido acético glacial y diluir a 10 mL con agua destilada (10% v/v). Pesar en balanza analítica 0.050 g (50.0 mg) de ácido sulfanílico y disolver en la solución. (Para 100 mL: disolver 0.5 g de ácido sulfanílico en 100 mL de ácido acético al 10%)."
+            },
+            {
+                "Reactivo": "Reactivo 2 (Agente de Acoplamiento): Clorhidrato de α-Naftilamina al 0.5% p/v",
+                "Estabilidad / Escala": "Almacenable en frasco ámbar en refrigeración — Escala 10 mL (Desechar si se torna oscuro)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL: pesar en balanza analítica 0.050 g (50.0 mg) de clorhidrato de α-naftilamina y disolver en 10 mL de metanol o etanol al 95%. (Para 100 mL: disolver 0.5 g de clorhidrato de α-naftilamina en 100 mL de metanol o etanol al 95%)."
+            },
+            {
+                "Reactivo": "Controles Obligatorios: Blanco de Reactivos, Control Positivo (NaNO₂ 0.1%) y Negativo",
+                "Estabilidad / Escala": "Obligatorios por serie analítica — Escala 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "• Blanco: Reactivos 1 + 2 sobre tela o hisopo limpio (Incoloro/Blanco). • Control Positivo: Solución de Nitrito de Sodio (NaNO₂) al 0.1% p/v (10.0 mg en 10 mL) o residuo de disparo conocido ⟶ Rosa/Rojo intenso. • Control Negativo: Agua destilada o área sin disparo ⟶ Sin cambio."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Humectación del Hisopo",
+                "desc": "Humedecer un hisopo de algodón estéril con agua destilada o con 1 gota (50 µL) del Reactivo 1 (ácido sulfanílico).",
+                "conc": "Hisopo + 50 µL R1/H₂O"
+            },
+            {
+                "title": "Hisopado de Superficie",
+                "desc": "Frotar enérgicamente la zona sospechosa. En vehículos o paredes, realizar hisopado periférico documentando cara externa (entrada) o interna (salida).",
+                "conc": "Periferia del Orificio"
+            },
+            {
+                "title": "Acoplamiento Azoico",
+                "desc": "Si se usó agua, añadir 1 gota de Reactivo 1; inmediatamente agregar 1 gota (50 µL) de Reactivo 2 (clorhidrato de α-naftilamina).",
+                "conc": "+ 50 µL Reactivo 2"
+            },
+            {
+                "title": "Lectura Inmediata",
+                "desc": "Observar instantáneamente el desarrollo cromático sobre el hisopo. El viraje inmediato a rosa brillante o magenta confirma nitritos.",
+                "conc": "Rosa / Magenta Instantáneo"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO</span>
+            <h4 style="margin:8px 0;">Puntos o Manchas de Color Rosa Brillante, Rojo o Magenta</h4>
+            <div style="display:flex; justify-content:center; align-items:center; margin:12px 0;">
+                <div style="width:200px; height:50px; border-radius:25px; background:linear-gradient(90deg, #F8FAFC 15%, #F43F5E 50%, #BE185D 100%); border:2px solid #94A3B8; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; font-size:0.84rem; text-shadow:1px 1px 2px #000; box-shadow: inset 0 0 8px rgba(0,0,0,0.2);">
+                    Hisopo: Rosa Brillante / Magenta
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Criterios de Aceptación:</b> 1) <b>Cromatismo:</b> Aparición de puntos o manchas de color <b>rosa brillante, rojo o magenta</b>; 2) <b>Persistencia:</b> El color es estable, aunque puede oscurecerse levemente por oxidación ambiental.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO / RECHAZO</span>
+            <h4 style="margin:8px 0;">Ausencia de Color o Viraje Anómalo a Amarillo / Marrón</h4>
+            <div style="display:flex; justify-content:center; align-items:center; gap:10px; margin:12px 0;">
+                <div style="flex:1; height:50px; border-radius:25px; background:#FFFFFF; border:2px dashed #94A3B8; display:flex; align-items:center; justify-content:center; color:#475569; font-weight:bold; font-size:0.8rem;">
+                    Negativo: Incoloro / Blanco
+                </div>
+                <div style="flex:1; height:50px; border-radius:25px; background:linear-gradient(90deg, #FEF08A, #A16207); border:2px solid #94A3B8; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; font-size:0.8rem; text-shadow:1px 1px 2px #000;">
+                    Rechazo: Amarillo / Marrón
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Criterios de Rechazo:</b> 1) <b>Ausencia de color:</b> El soporte permanece sin cambio; 2) <b>Viraje a amarillo/marrón:</b> Indica reactivo oxidado o interferencia de materia orgánica no nitrada.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "1) Manipulación y/o contacto con fertilizantes agrícolas (nitritos/nitratos), orina e incluso maquillaje.\n2) Transferencia de residuos por forcejeo con el atacante.\n3) Conservadores de alimentos (embutidos/curados) y medicamentos vasodilatadores (nitroglicerina)."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "1) Detonación en área abierta: los residuos se dispersan con mayor facilidad por corrientes de aire.\n2) Presencia de aire, así como su dirección e intensidad.\n3) Tiempo transcurrido: después de 6 h los residuos disminuyen significativamente.\n4) Lavado o lluvia intensa (los nitritos son sales hidrosolubles eliminadas por el agua).\n5) Armas con buen ajuste no desprenden suficiente pólvora/residuos, especialmente con un solo disparo.\n6) Oxidación ambiental previa de nitritos (NO₂⁻) a nitratos (NO₃⁻)."}
+        ]
+    },
+
+    "2. Prueba de Lunge (Nitratos y Oxidantes — NO₃⁻)": {
+        "titulo": "Prueba de Lunge — Detección de Nitratos y Oxidantes (Difenilamina en Ácido Sulfúrico)",
+        "fundamento": (
+            "La <b>Prueba de Lunge</b> se basa en una reacción de <b>óxido-reducción en medio ácido fuerte por transferencia de electrones</b>. "
+            "Es sumamente sensible para superficies duras, cristales, muros, paneles vehiculares y para el <b>interior del cañón del arma de fuego</b> para confirmar o descartar disparo reciente:<br>"
+            "• <b>Oxidación de la Difenilamina:</b> El <b>ácido sulfúrico concentrado (H₂SO₄ al 95–98%)</b> activa los nitratos (NO₃⁻); la difenilamina se oxida primero a <b>difenilbenzidina</b> (incolora) y luego a un <b>catión quinoidal altamente conjugado</b>.<br>"
+            "• <b>Cromóforo Azul:</b> El catión quinoidal resultante absorbe luz en el espectro visible, reflejando de forma inmediata un color <b>azul profundo, azul intenso o azul-violeta</b>.<br>"
+            "• <b>Fisicoquímica:</b> Si la deflagración fue completa y muy eficiente, los nitratos pasan a nitritos, lo que explica resultados Griess (+) y Lunge (-); por el contrario, en muestras antiguas o en cañones con residuos oxidados predomina Lunge (+)."
+        ),
+        "reaccion_general": "2 C₁₂H₁₁N (Difenilamina) + NO₃⁻ + H₂SO₄ (conc. 95-98%) ⟶ Difenilbenzidina (Incolora) ⟶ Catión Quinoidal Conjugado (Color Azul Intenso / Violeta en < 5 s)",
+        "reactivos": [
+            {
+                "Reactivo": "Reactivo de Lunge: Difenilamina al 0.5% p/v en H₂SO₄ Concentrado (95–98%)",
+                "Estabilidad / Escala": "⚠️ ALTAMENTE CORROSIVO — Escala 10 mL (o 100 mL)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Trabajar en campana de extracción con guantes de nitrilo gruesos. Pesar en balanza analítica 0.050 g (50.0 mg) de difenilamina grado analítico (o 0.5 g para 100 mL). Añadir lentamente sobre los cristales 10 mL (o 100 mL) de H₂SO₄ concentrado (95–98%). La solución debe quedar completamente incolora; si se torna azul en el frasco está contaminada con nitratos del ambiente y debe desecharse."
+            },
+            {
+                "Reactivo": "Controles Obligatorios: Blanco de Reactivos, Control Positivo (KNO₃ 1%) y Negativo",
+                "Estabilidad / Escala": "Obligatorios por corrida analítica — Escala 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "• Blanco: Reactivo de Lunge sin muestra (Incoloro/Transparente). • Control Positivo: Solución de Nitrato de Potasio (KNO₃) al 1% p/v (100.0 mg en 10 mL de agua destilada) ⟶ Azul profundo inmediato. • Control Negativo: Agua destilada o algodón limpio ⟶ Incoloro / Sin cambio."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Verificación del Reactivo",
+                "desc": "En campana de extracción, comprobar que el Reactivo de Lunge esté totalmente incoloro antes de iniciar el ensayo.",
+                "conc": "Blanco: Incoloro"
+            },
+            {
+                "title": "Hisopado Periférico / Ánima",
+                "desc": "Realizar hisopado enérgico en la periferia del orificio en superficies duras (vehículos, muros) o en el interior del cañón/ánima del arma.",
+                "conc": "Zona de Impacto / Cañón"
+            },
+            {
+                "title": "Adición de Lunge",
+                "desc": "Añadir de 1 a 2 gotas (50–100 µL) del Reactivo de Lunge directamente sobre el hisopo con guantes de protección.",
+                "conc": "50–100 µL Lunge"
+            },
+            {
+                "title": "Lectura Rápida (< 5 s)",
+                "desc": "Evaluar el viraje en menos de 5 segundos. La aparición de color azul profundo o violeta confirma nitratos u oxidantes.",
+                "conc": "Lectura: < 5 segundos"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO</span>
+            <h4 style="margin:8px 0;">Aparición Inmediata (&lt; 5 s) de Color Azul Intenso / Azul-Violeta</h4>
+            <div style="display:flex; justify-content:center; align-items:center; margin:12px 0;">
+                <div style="width:200px; height:50px; border-radius:25px; background:linear-gradient(90deg, #1E3A8A 15%, #1D4ED8 55%, #31102F 95%); border:2px solid #94A3B8; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; font-size:0.84rem; text-shadow:1px 1px 2px #000; box-shadow: inset 0 0 10px rgba(0,0,0,0.3);">
+                    Azul Profundo / Violeta (&lt; 5 s)
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Criterios de Aceptación:</b> 1) <b>Cromatismo:</b> Color <b>azul intenso o azul-negruzco</b>; 2) <b>Cinética:</b> Debe aparecer en <b>menos de 5 segundos</b>. Si aparece después de 1 minuto se debe a oxidación por el oxígeno del aire.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO / RECHAZO</span>
+            <h4 style="margin:8px 0;">Incoloro, Carbonización Directa a Café/Negro o Blanco Azul</h4>
+            <div style="display:flex; justify-content:center; align-items:center; gap:10px; margin:12px 0;">
+                <div style="flex:1; height:50px; border-radius:10px; background:#FEF9C3; border:1px solid #CBD5E1; display:flex; align-items:center; justify-content:center; color:#003366; font-weight:bold; font-size:0.76rem; padding:4px;">
+                    Negativo: Incoloro / Amarillo
+                </div>
+                <div style="flex:1; height:50px; border-radius:10px; background:linear-gradient(135deg, #451A03, #09090B); border:1px solid #CBD5E1; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; font-size:0.76rem; padding:4px;">
+                    Rechazo: Carbonización Inmediata
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Criterios de Rechazo:</b> 1) <b>Ausencia de color</b>; 2) <b>Carbonización directa</b> a café o negro (materia orgánica quemada por el H₂SO₄ sin pasar por el azul); 3) <b>Blanco contaminado:</b> reactivo azul antes de tocar la muestra.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "1) Si el arma no es limpiada con frecuencia o de manera correcta, existirán residuos acumulados en el ánima aunque no se haya disparado recientemente.\n2) Oxidantes fuertes: cloratos, permanganatos, dicromatos y sales férricas (óxido de hierro/herrumbre).\n3) Fertilizantes nitrogenados, residuos de tabaco/ceniza y productos de limpieza con cloro."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "1) Detección e interferencia por cenizas de cigarro.\n2) Composición y cantidad de la pólvora impregnada en el área de interés.\n3) Limpieza del arma con solventes derivados del petróleo que desplazan los nitratos.\n4) Deflagración extremadamente eficiente que redujo la totalidad de nitratos a nitritos."}
+        ]
+    },
+
+    "3. Prueba de Walker (Patrón Térmico en Prendas)": {
+        "titulo": "Prueba de Walker — Patrón de Dispersión Térmica en Prendas (Papel Fotográfico)",
+        "fundamento": (
+            "La <b>Prueba de Walker</b> es el procedimiento analítico clásico para identificar y mapear la <b>distribución topográfica de nitritos ('tatuaje' o rosa de deflagración)</b> "
+            "en prendas de vestir alrededor del orificio de entrada para determinar la <b>distancia del disparo</b>:<br>"
+            "• <b>Soporte Específico:</b> Utiliza <b>papel fotográfico brillante desensibilizado</b> (fijado y lavado para eliminar sales de plata, dejando solo la capa de gelatina que retiene los nitritos).<br>"
+            "• <b>Transferencia Térmica con Ácido Acético:</b> Se coloca una compresa con <b>ácido acético (CH₃COOH al 10–20%)</b> sobre la prenda y se aplica calor de plancha (1 a 2 min). El vapor ácido arrastra los nitritos de la fibra textil a la gelatina sensibilizada con ácido sulfanílico y α-naftilamina.<br>"
+            "• <b>Criterio de Distancia:</b> La prueba es presuntamente <b>positiva si el disparo fue próximo (&lt; 1 metro)</b> y presuntamente <b>negativa si la distancia fue mayor a 1 metro</b>."
+        ),
+        "reaccion_general": "Nitritos (en Fibras textiles) + Vapor CH₃COOH (10–20%) + Calor (1–2 min) ⟶ Gelatina de Papel (Ác. Sulfanílico + α-Naftilamina) ⟶ Patrón Concéntrico de Punteo Naranja-Rojizo / Rosa",
+        "reactivos": [
+            {
+                "Reactivo": "Soporte: Papel Fotográfico Brillante Desensibilizado",
+                "Estabilidad / Escala": "Preparación previa en cuarto oscuro — Insumo estructural",
+                "Preparación (Balanza Analítica y Micropipeta)": "Fijar el papel fotográfico en baño de tiosulfato de sodio y lavar con agua destilada para eliminar las sales de plata fotosensibles. Impregnar secuencialmente con las Soluciones A y B y secar al abrigo de la luz."
+            },
+            {
+                "Reactivo": "Solución A: Ácido Sulfanílico al 0.5% p/v en Agua Destilada",
+                "Estabilidad / Escala": "Almacenable — Escala 10 mL (o 100 mL)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL: pesar en balanza analítica 0.050 g (50.0 mg) de ácido sulfanílico y disolver en 10 mL de agua destilada con calor suave si es necesario. (Para 100 mL: disolver 0.5 g en 100 mL de agua destilada)."
+            },
+            {
+                "Reactivo": "Solución B: Clorhidrato de α-Naftilamina al 0.5% p/v en Alcohol al 95%",
+                "Estabilidad / Escala": "Almacenable en frasco ámbar — Escala 10 mL (o 100 mL)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL: pesar en balanza analítica 0.050 g (50.0 mg) de clorhidrato de α-naftilamina y disolver en 10 mL de metanol o etanol al 95%. (Para 100 mL: disolver 0.5 g en 100 mL de alcohol al 95%)."
+            },
+            {
+                "Reactivo": "Solución de Transferencia Térmica: Ácido Acético al 10% o 20% v/v",
+                "Estabilidad / Escala": "Almacenable — Escala 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL: medir con micropipeta 1.0 mL (1000 µL para el 10%) o 2.0 mL (2000 µL para el 20%) de ácido acético glacial y aforar a 10 mL con agua destilada."
+            },
+            {
+                "Reactivo": "Controles Obligatorios de Papel: Blanco, Control Positivo (NaNO₂ 0.5%) y Negativo",
+                "Estabilidad / Escala": "Obligatorios por cada pliego de papel revelado",
+                "Preparación (Balanza Analítica y Micropipeta)": "• Blanco de Papel: Papel tratado + Ácido Acético + Calor sin prenda ⟶ Totalmente blanco. • Control Positivo: Tocar un borde con NaNO₂ al 0.5% p/v (50.0 mg en 10 mL) ⟶ Punto Rosa/Rojo instantáneo. • Control Negativo: Zona procesada con tela limpia ⟶ Blanco."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Disposición del Papel",
+                "desc": "Colocar el papel fotográfico desensibilizado y sensibilizado sobre una mesa plana con la cara de gelatina hacia arriba.",
+                "conc": "Gelatina hacia Arriba"
+            },
+            {
+                "title": "Montaje Cara a Cara",
+                "desc": "Extender la prenda sin estirarla artificialmente y colocar la zona del orificio cara a cara contra el papel fotográfico.",
+                "conc": "Orificio Cara a Cara"
+            },
+            {
+                "title": "Compresa con Ácido Acético",
+                "desc": "Colocar encima una gasa delgada humedecida uniformemente con ácido acético al 10% o 20% (sin exceso de líquido).",
+                "conc": "Gasa CH₃COOH 10–20%"
+            },
+            {
+                "title": "Transferencia Térmica",
+                "desc": "Aplicar una plancha doméstica a temperatura media durante 1 a 2 minutos para arrastrar los nitritos hacia la gelatina.",
+                "conc": "Plancha: 1 a 2 minutos"
+            },
+            {
+                "title": "Revelado y Mapeo",
+                "desc": "Retirar la prenda y evaluar la nitidez del 'tatuaje' de puntos rosados o naranja-rojizos para medir el diámetro de dispersión.",
+                "conc": "Punteo Concéntrico"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO — "ROSA DE DEFLAGRACIÓN / TATUAJE"</span>
+            <h4 style="margin:8px 0;">Punteo Nítido Naranja-Rojizo o Rosa Intenso Concéntrico</h4>
+            <div style="display:flex; justify-content:center; align-items:center; margin:12px 0;">
+                <div style="width:140px; height:110px; background:#FFFFFF; border:2px solid #64748B; border-radius:8px; display:flex; align-items:center; justify-content:center; box-shadow: inset 0 0 8px rgba(0,0,0,0.1); background-image: radial-gradient(circle at 50% 50%, #1E293B 7%, transparent 9%), radial-gradient(circle at 38% 42%, #E11D48 2.5%, transparent 3.5%), radial-gradient(circle at 62% 38%, #F43F5E 3%, transparent 4%), radial-gradient(circle at 44% 64%, #BE185D 2.5%, transparent 3.5%), radial-gradient(circle at 58% 60%, #E11D48 3%, transparent 4%), radial-gradient(circle at 32% 54%, #FB7185 2.5%, transparent 3.5%), radial-gradient(circle at 68% 52%, #E11D48 2.5%, transparent 3.5%), radial-gradient(circle at 50% 30%, #F43F5E 2.5%, transparent 3.5%), radial-gradient(circle at 48% 72%, #E11D48 2%, transparent 3%), radial-gradient(circle at 28% 35%, #FB7185 2%, transparent 3%), radial-gradient(circle at 72% 66%, #F43F5E 2%, transparent 3%);">
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Criterios de Aceptación:</b> 1) <b>Cromatismo:</b> Puntos color <b>naranja-rojizo o rosa intenso</b>; 2) <b>Morfología ('El Tatuaje'):</b> Puntos nítidos con distribución concéntrica o dispersa alrededor del orificio (disparo próximo &lt; 1 m); 3) <b>Fijación:</b> Tatuaje indeleble en la gelatina.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO / RECHAZO</span>
+            <h4 style="margin:8px 0;">Papel Blanco (&gt; 1 m), Mancha Borrosa o Quemadura Marrón</h4>
+            <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin:12px 0;">
+                <div style="flex:1; height:60px; background:#FFFFFF; border:2px dashed #94A3B8; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#475569; font-size:0.72rem; font-weight:bold; padding:4px;">
+                    Negativo (&gt; 1 m): Blanco
+                </div>
+                <div style="flex:1; height:60px; background:radial-gradient(circle, #FDA4AF 30%, #FFF1F2 80%); border:1px solid #F43F5E; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#881337; font-size:0.72rem; font-weight:bold; padding:4px;">
+                    Rechazo: Sangrado Ácido
+                </div>
+                <div style="flex:1; height:60px; background:linear-gradient(135deg, #FEF3C7, #92400E); border:1px solid #78350F; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-size:0.72rem; font-weight:bold; padding:4px;">
+                    Rechazo: Quemadura Térmica
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Criterios de Rechazo:</b> 1) <b>Ausencia de puntos:</b> Papel blanco (disparo a más de 1 metro o sin residuos); 2) <b>Difuminación (efecto 'sangrado'):</b> Exceso de ácido acético o calor; 3) <b>Quemadura:</b> Papel marrón por plancha excesiva; 4) <b>Fondo rosa contaminado</b>.
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "1) Manipulación y/o contacto con fertilizantes, orina e incluso maquillaje.\n2) Transferencia de residuos por forcejeo con el atacante.\n(Nota técnica: estos contaminantes producen manchas difusas amorfas y NO el 'punteo' concéntrico característico de los granos de pólvora)."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "1) Detonación en área abierta (dispersión de residuos por corrientes de aire).\n2) Presencia de aire, así como su dirección e intensidad.\n3) Distancia al blanco (mayor a 1 metro).\n4) Tiempo transcurrido: después de 6 h los residuos disminuyen significativamente.\n5) Frotamiento mecánico de las prendas con otros objetos.\n6) Armas con buen ajuste no desprenden suficiente pólvora/residuos con un solo disparo."}
+        ]
+    },
+
+    "4. Prueba de Rodizonato de Sodio (Plomo y Bario en Manos)": {
+        "titulo": "Prueba de Rodizonato de Sodio — Plomo (Pb²⁺) y Bario (Ba²⁺) en Manos",
+        "fundamento": (
+            "La <b>Prueba de Rodizonato de Sodio</b> es el método químico forense para identificar metales pesados del fulminante —específicamente <b>Plomo (Pb<sup>2+</sup>)</b> y <b>Bario (Ba<sup>2+</sup>)</b>— "
+            "que se vaporizan, funden y depositan sobre las manos del tirador (<i>'triángulo de la muerte': dorso y palma entre pulgar e índice</i>):<br>"
+            "• <b>Sustitución de Harrison Gilroy:</b> Se utiliza Rodizonato de Sodio debido a que el antimonio no se puede determinar de forma rutinaria por la falta de reactivos específicos (yoduro de trifenilmetilarsonio), además de su toxicidad e inestabilidad.<br>"
+            "• <b>Quelación Inicial (Buffer pH 2.8):</b> El rodizonato reacciona a pH 2.8 formando quelatos: con <b>Plomo (Pb²⁺)</b> da color <b>rojo escarlata / rosa intenso</b>, y con <b>Bario (Ba²⁺)</b> color <b>rojo-marrón</b>.<br>"
+            "• <b>Confirmación Ácida Diferencial (HCl al 5%):</b> Al añadir HCl al 5%, el complejo de plomo <b>vira obligatoriamente a azul-violeta o morado</b>; por el contrario, el complejo de bario <b>se decolora / desaparece</b>.<br>"
+            "• <b>Morfología Esférica al Estereoscopio (Obligatoria):</b> Se deben observar micropartículas con <b>forma esférica o globular</b> (metal fundido y solidificado a 1500–2000 °C) con un <b>núcleo metálico central</b> y un <b>halo reaccional ('corona')</b> por difusión capilar."
+        ),
+        "reaccion_general": "Pb²⁺/Ba²⁺ + Rodizonato (Buffer pH 2.8) ⟶ Quelato Rosa Escarlata (Pb) / Rojo-Marrón (Ba)  ⟶  (+ HCl 5%)  ⟶  Halo Azul-Violeta / Morado (Confirma Pb²⁺) | Decoloración (Ba²⁺)",
+        "reactivos": [
+            {
+                "Reactivo": "Solución de Levantamiento: Ácido Sulfúrico (H₂SO₄) al 2% v/v + Telas libres de asbesto",
+                "Estabilidad / Escala": "Almacenable — Escala 10 mL (4 fragmentos de tela blanca de algodón)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL: medir con micropipeta 200 µL (0.2 mL) de H₂SO₄ concentrado y aforar a 10 mL con agua destilada. Cortar fragmentos de tela blanca libre de asbesto (un fragmento individual para palma y otro para dorso de cada mano)."
+            },
+            {
+                "Reactivo": "Solución Amortiguadora: Buffer Tartrato a pH 2.8",
+                "Estabilidad / Escala": "Almacenable — Escala 10 mL (o 100 mL)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL: pesar en balanza analítica 0.190 g (190.0 mg) de bitartrato de potasio y 0.150 g (150.0 mg) de ácido tartárico; disolver hasta aforar a 10 mL con agua destilada. (Para 100 mL: disolver 1.9 g de bitartrato de potasio y 1.5 g de ácido tartárico en 100 mL de agua destilada)."
+            },
+            {
+                "Reactivo": "Solución de Rodizonato de Sodio (C₆Na₂O₆ al ~0.2% p/v — Color 'Té Cargado')",
+                "Estabilidad / Escala": "⚠️ PREPARAR AL MOMENTO — Escala 1 mL (Pierde sensibilidad en < 1 hora)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Disolver una pequeña cantidad (punta de espátula, ~2.0 mg) de rodizonato de sodio en 1000 µL (1.0 mL) de agua destilada recién hervida y enfriada hasta obtener un color 'té cargado' o naranja oscuro. Desechar si se torna verde o negro."
+            },
+            {
+                "Reactivo": "Solución Confirmatoria: Ácido Clorhídrico (HCl) al 5% v/v",
+                "Estabilidad / Escala": "Almacenable — Escala 10 mL (o 100 mL)",
+                "Preparación (Balanza Analítica y Micropipeta)": "Para 10 mL: medir con micropipeta 500 µL (0.5 mL) de HCl concentrado y mezclar con 9.5 mL (9500 µL) de agua destilada. (Para 100 mL: mezclar 5 mL de HCl concentrado con 95 mL de agua destilada)."
+            },
+            {
+                "Reactivo": "Controles Obligatorios: Blanco, Control Positivo de Plomo (Pb) y Negativo",
+                "Estabilidad / Escala": "Obligatorios por corrida analítica — Escala 10 mL",
+                "Preparación (Balanza Analítica y Micropipeta)": "• Blanco: Buffer pH 2.8 + Rodizonato sin muestra ⟶ Amarillo/Naranja pálido propio del reactivo. • Control Positivo (Pb): Solución de Nitrato de Plomo al 1% p/v (100.0 mg en 10 mL) ⟶ Rosa que vira a Azul/Violeta con HCl 5%. • Control Negativo: Algodón/tela limpia con agua ⟶ Naranja sin cambio."
+            }
+        ],
+        "pasos": [
+            {
+                "title": "Levantamiento en Manos",
+                "desc": "Humedecer un fragmento de tela con H₂SO₄ al 2% y frotar firmemente dorso y palma de cada mano (triángulo de la muerte).",
+                "conc": "4 Telas (H₂SO₄ 2%)"
+            },
+            {
+                "title": "Buffer pH 2.8 y Rodizonato",
+                "desc": "Añadir sobre la tela 1 a 2 gotas (50–100 µL) de buffer pH 2.8 y enseguida 1 a 2 gotas de rodizonato recién preparado.",
+                "conc": "pH 2.8 + Rodizonato"
+            },
+            {
+                "title": "Estereoscopio (Morfología)",
+                "desc": "Bajo luz oblicua, buscar micropartículas esféricas con núcleo metálico central y halo reaccional rosa escarlata (Pb²⁺) o rojo-marrón (Ba²⁺).",
+                "conc": "Esfera + Halo Rosa"
+            },
+            {
+                "title": "Confirmación con HCl 5%",
+                "desc": "Añadir 1 gota de HCl al 5% sobre los puntos reactivos. Si el halo vira a azul-violeta se confirma Plomo; si se decolora es Bario.",
+                "conc": "Viraje a Azul-Violeta"
+            }
+        ],
+        "visual_pos_html": """
+        <div class="forensic-card" style="border-top: 5px solid #0F766E;">
+            <span class="badge-teal">RESULTADO POSITIVO A PLOMO (Pb²⁺) AL ESTEREOSCOPIO</span>
+            <h4 style="margin:8px 0;">Micropartícula Esférica + Halo Rosa Escarlata ⟶ Viraje a Azul-Violeta con HCl 5%</h4>
+            <div style="display:flex; justify-content:center; align-items:center; gap:18px; margin:12px 0;">
+                <div style="text-align:center;">
+                    <div style="width:85px; height:85px; border-radius:50%; background:radial-gradient(circle, #334155 16%, #E11D48 38%, #FDA4AF 65%, #FEF3C7 100%); border:2px solid #003366; margin:0 auto 4px auto; box-shadow: 0 2px 6px rgba(0,0,0,0.2);"></div>
+                    <div style="font-size:0.75rem; font-weight:bold; color:#003366;">1° pH 2.8: Halo Rosa (Pb)<br>/ Rojo-Marrón (Ba)</div>
+                </div>
+                <div style="font-size:1.5rem; font-weight:bold; color:#003366;">+ HCl 5% ⟶</div>
+                <div style="text-align:center;">
+                    <div style="width:85px; height:85px; border-radius:50%; background:radial-gradient(circle, #334155 16%, #4338CA 38%, #7E22CE 65%, #F8FAFC 100%); border:2px solid #003366; margin:0 auto 4px auto; box-shadow: 0 2px 6px rgba(0,0,0,0.2);"></div>
+                    <div style="font-size:0.75rem; font-weight:bold; color:#003366;">2° Confirmación Pb²⁺:<br>Halo Azul-Violeta</div>
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Criterios Obligatorios:</b> 1) <b>Secuencia Cromática:</b> Viraje obligatorio de Rosa a <b>Azul-Violeta</b> tras el HCl al 5% (el Bario se decolora); 2) <b>Morfología Esférica:</b> Partícula esférica o globular fundida con <b>núcleo metálico central y corona de difusión capilar</b>.
+            </p>
+        </div>
+        """,
+        "visual_neg_html": """
+        <div class="forensic-card" style="border-top: 5px solid #C0392B;">
+            <span class="badge-red">RESULTADO NEGATIVO / RECHAZO</span>
+            <h4 style="margin:8px 0;">Color Naranja Natural, Mancha Difusa sin Esferas o Viraje Falso</h4>
+            <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin:12px 0;">
+                <div style="flex:1; height:56px; border-radius:8px; background:#FDE68A; border:1px solid #D97706; display:flex; align-items:center; justify-content:center; color:#003366; font-size:0.72rem; font-weight:bold; padding:4px;">
+                    Negativo: Naranja Propio
+                </div>
+                <div style="flex:1; height:56px; border-radius:8px; background:linear-gradient(90deg, #F472B6, #EC4899); border:1px dashed #9D174D; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-size:0.72rem; font-weight:bold; padding:4px;">
+                    Rechazo: Mancha Difusa
+                </div>
+                <div style="flex:1; height:56px; border-radius:8px; background:linear-gradient(135deg, #065F46, #111827); border:1px solid #000; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-size:0.72rem; font-weight:bold; padding:4px;">
+                    Rechazo: Reactivo Verde/Negro
+                </div>
+            </div>
+            <p style="font-size:0.88rem; margin-bottom:0;">
+                <b>Criterios de Rechazo:</b> 1) <b>Ausencia de cambio:</b> La tela mantiene el color naranja; 2) <b>Ausencia de morfología:</b> Mancha difusa sin esferas (contaminación por contacto); 3) <b>Viraje falso:</b> Azul directo sin pasar por rosa (hierro); 4) <b>Reactivo verde o negro</b> (degradado).
+            </p>
+        </div>
+        """,
+        "interferencias": [
+            {"Tipo": "Falsos Positivos", "Causa / Sustancia Interferente": "1) Falso positivo a plomo en personas que desempeñan labores de contacto metálico: hojalateros, plomeros, mecánicos (soldaduras y baterías/acumuladores).\n2) El bario es componente común de raticidas y fuegos artificiales (pirotecnia).\n3) Transferencia de residuos por forcejeo con el atacante.\n4) Desaconsejado en prendas: botones, cierres y remaches metálicos o tintes textiles reaccionan con el rodizonato."},
+            {"Tipo": "Falsos Negativos", "Causa / Sustancia Interferente": "1) Lavado de manos con agua y jabón o frotamiento de manos contra la ropa (eliminación mecánica de partículas).\n2) Tiempo transcurrido: después de 6 h los residuos disminuyen significativamente.\n3) Tamaño limitado de la muestra y bajo número de detonaciones (con un solo disparo disminuye la probabilidad).\n4) Armas de diseño cerrado o con buen ajuste (revólveres dejan más residuos que pistolas automáticas)."}
+        ]
+    }
+}
+
+
+# ==============================================================================
+# RENDERIZADOR DE PRUEBAS DE BALÍSTICA QUÍMICA (GSR)
+# ==============================================================================
+
+
+def tab_analisis_gsr():
+    render_ficha_forense_db(ANALISIS_GSR_DB, "", "gsr")
+    render_analytical_note_gsr()
+
+
+
+# ==============================================================================
 # FUNCIÓN PRINCIPAL (MAIN)
 # ==============================================================================
 
@@ -2675,7 +3060,7 @@ def main():
         # 1. Elección de la página en el Panel de Control
         modulo_seleccionado = st.radio(
             "Seleccione el Área Forense:",
-            ["⚗️ Análisis Químico", "🧪 Toxicología"],
+            ["⚗️ Análisis Químico", "🧪 Toxicología", "🔫 Residuos de Arma de Fuego"],
             index=0,
             key="sidebar_modulo_nav"
         )
@@ -2691,9 +3076,8 @@ def main():
             st.markdown("<hr style='border-color: #D1D5DB;'>", unsafe_allow_html=True)
 
         st.markdown(
-            "<div style=\"background-color: #E5E7EB; padding: 15px; border-radius: 8px; border: 1px solid #D1D5DB; text-align: center; font-size: 0.8rem; color: #003366;\">"
-            "<b>Realizado por:</b><br/>QFB Edgar Oswaldo Díaz Andrade<br/><br/>"
-            "<span style=\"color:#334155;\">Herramienta pericial para perfilación química, extracción L-L, toxicología forense y CG-MS Headspace.</span>"
+            "<div style=\"background-color: #E5E7EB; padding: 15px; border-radius: 8px; border: 1px solid #D1D5DB; text-align: center; font-size: 0.85rem; color: #003366;\">"
+            "<b>Realizado por:</b><br/>QFB Edgar Oswaldo Díaz Andrade"
             "</div>", 
             unsafe_allow_html=True
         )
@@ -2730,7 +3114,7 @@ def main():
         </div>
         ''', unsafe_allow_html=True)
 
-    else:
+    elif modulo_seleccionado == "🧪 Toxicología":
         # Página de Toxicología
         st.markdown("<h1>Toxicología Forense</h1>", unsafe_allow_html=True)
         
@@ -2763,6 +3147,20 @@ def main():
         <div class="footer">
             <b>Referencias Bibliográficas:</b><br/>
             [1] Moffat AC, Osselton MD, Widdop B, Watts J, editores. <i>Clarke\'s Analysis of Drugs and Poisons: In pharmaceuticals, body fluids and postmortem material</i>. 4a ed. Londres: Pharmaceutical Press; 2011.<br/>
+            <span style="font-weight: bold; margin-top: 10px; display: inline-block;">Realizado por: QFB Edgar Oswaldo Díaz Andrade</span>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    else:
+        # Página de Residuos de Disparo por Arma de Fuego (GSR)
+        st.markdown("<h1>Residuos de Disparo por Arma de Fuego (GSR)</h1>", unsafe_allow_html=True)
+        tab_analisis_gsr()
+
+        st.markdown('''
+        <div class="footer">
+            <b>Referencias Bibliográficas:</b><br/>
+            [1] Fiscalía General de Justicia de la Ciudad de México (FGJCDMX). <i>Manual de Procedimientos del Laboratorio de Química Forense (Código: MP-QF-01, Versión 01)</i>. Coordinación General de Investigación Forense y Servicios Periciales; 2026.<br/>
+            [2] González Lozano, R. U., Rebollar López, E. J., & Pérez Cabrera, M. F. (2023). <i>Falsos positivos y falsos negativos de las técnicas colorimétricas para la identificación de residuos provenientes de armas de fuego</i>. <b>Revista Mexicana de Ciencias Penales</b> (INACIPE), 6(20), 123–136. DOI: 10.57042/rmcp.v6i20.635<br/>
             <span style="font-weight: bold; margin-top: 10px; display: inline-block;">Realizado por: QFB Edgar Oswaldo Díaz Andrade</span>
         </div>
         ''', unsafe_allow_html=True)
